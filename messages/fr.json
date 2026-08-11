@@ -1,0 +1,19 @@
+{
+  "common": {
+    "appName": "Papeterie"
+  },
+  "home": {
+    "title": "Bienvenue chez Papeterie",
+    "description": "Boutique de papeterie en ligne à Nouadhibou"
+  },
+  "errors": {
+    "title": "Une erreur est survenue",
+    "description": "Une erreur inattendue s'est produite. Veuillez réessayer.",
+    "retry": "Réessayer"
+  },
+  "notFound": {
+    "title": "Page introuvable",
+    "description": "La page que vous recherchez n'existe pas.",
+    "backHome": "Retour à l'accueil"
+  }
+}
