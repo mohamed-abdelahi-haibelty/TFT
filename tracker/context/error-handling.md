@@ -41,5 +41,7 @@ Service functions return `{ ok: false, error: { code, message } }` with codes:
 
 ## Logging
 
-- Tiny `src/lib/logger.ts` (level + JSON to console; Vercel captures it). Log every `INTERNAL` with request context. No third-party logging service in v1.
+- Tiny `src/lib/logger.ts` (level + JSON to console; Vercel captures it). Log every `INTERNAL` with request context.
+- `logger.error` also forwards to Sentry (`Sentry.captureException`), unless the call's `context.code` is one of the expected taxonomy codes (`VALIDATION`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `RATE_LIMITED`) — only unexpected (`INTERNAL`/uncoded) errors reach Sentry. Off entirely when `NEXT_PUBLIC_SENTRY_DSN` is unset.
+- A shared `beforeSend` scrubber (`src/lib/observability/scrub-sentry-event.ts`) strips `customer_phone`/`phone` fields and any bare 8-digit number (Mauritanian phone format) from every Sentry event before it leaves the app — applied on both client and server `Sentry.init`.
 - Never log customer phone numbers at info level; only within order records in DB.

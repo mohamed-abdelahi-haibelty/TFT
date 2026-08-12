@@ -15,6 +15,7 @@
 | Validation | Zod | All external input at boundaries (forms, route handlers, server actions) |
 | Caching | Next.js ISR + `revalidateTag`; Cloudflare CDN in front | No Redis in v1 |
 | Hosting | Vercel free tier; Cloudflare for DNS/CDN/rate limiting | |
+| Observability | Sentry (`@sentry/nextjs`, free tier) + PostHog (`posthog-js`/`posthog-node`, free tier) | Error tracking + product analytics. Both off when their env vars are unset; PostHog client loads lazily after idle so it never affects LCP |
 
 ## System Boundaries
 

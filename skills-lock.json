@@ -13,6 +13,13 @@
       "skillPath": "skills/neon-postgres/SKILL.md",
       "computedHash": "58b7ffd550cc8a17c86250999cbdd0020bcb839d2389d423227272743c8d2fb8"
     },
+    "sentry-cli": {
+      "source": "cli.sentry.dev",
+      "sourceUrl": "https://cli.sentry.dev",
+      "sourceType": "well-known",
+      "computedHash": "20425680469bde7c7b0579ffd8aef5e9529e7668bbc6286151fd3eef57b01097",
+      "wellKnownDigest": "sha256:deacdd7c5a704acf2c58825b08a7317b7b6315a49664adc8e90e705cde61dd73"
+    },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
