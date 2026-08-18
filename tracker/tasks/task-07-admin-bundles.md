@@ -15,7 +15,7 @@ Task 05.
 - Cache tags revalidated.
 
 ## Done when
-- [ ] Bundle with 3 items shows correct derived availability when a component's stock changes.
-- [ ] Deactivating a component deactivates the bundle and warns.
-- [ ] Unit test: availability derivation incl. backorder component.
-- [ ] Build + tests pass.
+- [x] Bundle with 3 items shows correct derived availability when a component's stock changes.
+- [x] Deactivating a component deactivates the bundle and warns.
+- [x] Unit test: availability derivation incl. backorder component.
+- [x] Build + tests pass.

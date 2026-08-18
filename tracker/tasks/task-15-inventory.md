@@ -14,7 +14,7 @@ Task 14.
 - Negative resulting stock allowed only for backorder products; otherwise `CONFLICT`.
 
 ## Done when
-- [ ] Adjustment updates qty and appears in the log with actor + reason.
-- [ ] Sum of an item's movements equals its current stock for seeded + test flows (integration test).
-- [ ] Non-backorder item cannot be adjusted below zero.
-- [ ] Build + tests pass.
+- [x] Adjustment updates qty and appears in the log with actor + reason.
+- [x] Sum of an item's movements equals its current stock for seeded + test flows (integration test).
+- [x] Non-backorder item cannot be adjusted below zero.
+- [x] Build + tests pass.

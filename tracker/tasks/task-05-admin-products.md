@@ -16,9 +16,9 @@ Task 04.
 - Storefront cache tags revalidated on every mutation.
 
 ## Done when
-- [ ] Admin creates a product with 2 variants and 3 images; staff sees it read-only (no edit affordances, mutations rejected server-side).
-- [ ] Discount ≥ price is rejected with a field error.
-- [ ] Duplicate slug/SKU → `CONFLICT` with localized message.
-- [ ] Initial stock creates a matching `stock_movements` row.
-- [ ] Integration test: staff calling the update service → `FORBIDDEN`.
-- [ ] Build + tests pass.
+- [x] Admin creates a product with 2 variants and 3 images; staff sees it read-only (no edit affordances, mutations rejected server-side).
+- [x] Discount ≥ price is rejected with a field error.
+- [x] Duplicate slug/SKU → `CONFLICT` with localized message.
+- [x] Initial stock creates a matching `stock_movements` row.
+- [x] Integration test: staff calling the update service → `FORBIDDEN`.
+- [x] Build + tests pass.

@@ -14,7 +14,7 @@ Task 03.
 - Server-side delete endpoint used when an image is removed from a saved product.
 
 ## Done when
-- [ ] Uploading 3 images shows progress and yields ordered public_ids; one simulated failure is retryable alone.
-- [ ] Rendered URLs contain `f_auto,q_auto` and the white-pad transform for card/gallery sizes.
-- [ ] Unauthenticated call to the sign endpoint → 401.
-- [ ] Build + tests pass (unit test: URL builder outputs).
+- [x] Uploading 3 images shows progress and yields ordered public_ids; one simulated failure is retryable alone.
+- [x] Rendered URLs contain `f_auto,q_auto` and the white-pad transform for card/gallery sizes.
+- [x] Unauthenticated call to the sign endpoint → 401.
+- [x] Build + tests pass (unit test: URL builder outputs).

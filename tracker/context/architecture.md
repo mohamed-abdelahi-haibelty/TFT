@@ -15,12 +15,11 @@
 | Validation | Zod | All external input at boundaries (forms, route handlers, server actions) |
 | Caching | Next.js ISR + `revalidateTag`; Cloudflare CDN in front | No Redis in v1 |
 | Hosting | Vercel free tier; Cloudflare for DNS/CDN/rate limiting | |
-| Observability | Sentry (`@sentry/nextjs`, free tier) + PostHog (`posthog-js`/`posthog-node`, free tier) | Error tracking + product analytics. Both off when their env vars are unset; PostHog client loads lazily after idle so it never affects LCP |
 
 ## System Boundaries
 
 - `app/[locale]/(store)/` — public storefront pages. Server components by default. Never imports admin code.
-- `app/[locale]/admin/` — admin panel pages. Every page enforces session + role.
+- `app/[locale]/admin/` — admin panel pages. Every page enforces session + the permission its section needs (`ADMIN_SECTIONS`).
 - `app/api/` — route handlers (order creation, tracking lookup, barcode image, Cloudinary signature). Thin: validate → call service → respond.
 - `src/db/` — Drizzle schema, migrations, seed. Only place that defines tables.
 - `src/services/` — business logic (orders, stock, sales, bundles). The ONLY layer that mutates the database. UI and route handlers never write queries with side effects directly.
@@ -36,18 +35,19 @@
 
 ## Auth and Access Model
 
-- Better Auth email/password. No public signup: the seed creates the admin; admin creates the single staff account from the Users page.
-- `user.role` ∈ {`admin`, `staff`}.
-- `staff` can: view/update orders, run POS, adjust stock, view products.
-- `staff` cannot: create/delete products or bundles, change prices/discounts, manage users, view the revenue dashboard, void completed sales.
-- Enforcement lives in the service layer (every mutating service function receives the acting user and checks role) — not only in the UI.
+- Better Auth email/password. No public signup: the seed creates the admin; admin creates staff accounts from the Users page.
+- `user.role` ∈ {`admin`, `staff`}. `admin` (the shop owner) implicitly holds every permission and cannot be limited.
+- `users.permissions` (`text[]`) holds the keys granted to a `staff` account. The vocabulary is `src/lib/permissions.ts`: `catalog.view` / `catalog.manage` / `catalog.pricing`, `promotions.manage`, `orders.view` / `orders.manage` / `orders.cancel`, `pos.use` / `pos.void`, `inventory.view` / `inventory.adjust`, `labels.print`, `dashboard.view`, plus `users.manage` and `settings.manage` which are **admin-exclusive and never grantable** (so no staff account can widen its own access).
+- Permissions have prerequisites (`PERMISSION_REQUIRES`, e.g. `catalog.pricing` → `catalog.manage` → `catalog.view`). Both the writer (`setStaffPermissions`) and the reader (`evaluateSession`) close a granted set over them, so an incoherent set cannot be stored or acted on.
+- A new staff account starts with **nothing** granted; the admin grants explicitly at `/admin/users/[id]`. Staff rows that predate the feature were backfilled by migration `0006` with the access they already had.
+- Enforcement lives in the service layer: every gated service function calls `requirePermission(key)`. `requireUser(role?)` remains only for "any signed-in operator" (the admin shell, the login redirect). The UI hides what an account cannot do; that is a courtesy, never the rule.
 - Public order tracking authenticates by pair: order code + customer phone.
 
 ## Order Model
 
 - `orders.source` ∈ {`web`, `pos`}.
 - Web statuses: `pending → confirmed → preparing → (shipped → arrived | ready) → delivered`, or `cancelled` from any pre-delivered state. `shipped/arrived` path for NKC/other-city delivery; `ready` path for NDB pickup.
-- POS sales are orders created directly as `delivered`, plus `voided` as a terminal admin-only transition.
+- POS sales are orders created directly as `delivered`, plus `voided` as a terminal transition gated on `pos.void`.
 - Every status change, item edit, cancellation, and void appends an `order_events` row (actor, type, payload, timestamp).
 
 ## Stock Model
@@ -69,3 +69,4 @@
 8. All external input is Zod-parsed before use.
 9. `components/ui/*` (shadcn) is never hand-edited.
 10. Images are only ever rendered through Cloudinary transform URLs with `f_auto,q_auto`.
+11. Every displayed and charged price comes from the pricing service (`getEffectivePrice`) with the correct channel (`web`/`pos`); promotions never stack with `discount_price` — the pricing service picks one. Promo countdowns in UI are cosmetic; the server clock decides applicability at charge time.

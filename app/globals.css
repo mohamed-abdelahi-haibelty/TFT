@@ -4,12 +4,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+  Token source: DESIGN.md (root). Palette extracted from the TFT logo
+  (gold, ink, sketchbook blue, poppy red, crayon violet) plus a Salla-style
+  green added for "success" — see DESIGN.md's Colors section for the full
+  rationale and the No White-on-Gold / Ink-Not-Black / Status-Color rules.
+*/
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-reading: var(--font-reading);
+  --font-heading: var(--font-heading);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -46,75 +55,151 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-pill: 9999px;
+
+  /* Brand + status family — DESIGN.md "Colors" */
+  --color-gold: var(--gold);
+  --color-gold-strong: var(--gold-strong);
+  --color-gold-soft: var(--gold-soft);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-paper: var(--paper);
+  --color-blue: var(--blue);
+  --color-blue-text: var(--blue-text);
+  --color-blue-bg: var(--blue-bg);
+  --color-red: var(--red);
+  --color-red-text: var(--red-text);
+  --color-red-bg: var(--red-bg);
+  --color-red-strong: var(--red-strong);
+  --color-green: var(--green);
+  --color-green-text: var(--green-text);
+  --color-green-bg: var(--green-bg);
+  --color-violet: var(--violet);
+  --color-violet-text: var(--violet-text);
+  --color-violet-bg: var(--violet-bg);
+
+  /* Storefront "Atelier Blanc" accent — DESIGN.md's Colors section */
+  --color-plum: var(--plum);
+  --color-plum-deep: var(--plum-deep);
+  --color-plum-soft: var(--plum-soft);
 }
 
 :root {
+  /* Brand + status family (raw values — see DESIGN.md for hex + rationale) */
+  --gold: oklch(0.771 0.144 69.41);
+  --gold-strong: oklch(0.7 0.145 67.39);
+  --gold-soft: oklch(0.947 0.036 78.13);
+  --ink: oklch(0.204 0.009 59.14);
+  --ink-soft: oklch(0.457 0.012 67.51);
+  --paper: oklch(0.982 0.003 84.56);
+  --blue: oklch(0.573 0.126 247.32);
+  --blue-text: oklch(0.463 0.107 248.22);
+  --blue-bg: oklch(0.953 0.016 245.09);
+  --red: oklch(0.626 0.184 29.79);
+  --red-text: oklch(0.532 0.166 30.13);
+  --red-bg: oklch(0.95 0.019 29.55);
+  --red-strong: oklch(0.549 0.174 29.32);
+  --green: oklch(0.621 0.141 152.69);
+  --green-text: oklch(0.515 0.116 153.04);
+  --green-bg: oklch(0.957 0.019 157.87);
+  --violet: oklch(0.565 0.144 305.9);
+  --violet-text: oklch(0.466 0.129 307.23);
+  --violet-bg: oklch(0.944 0.02 311.08);
+
+  /* Storefront "Atelier Blanc" accent — a hue outside the logo family by
+     deliberate choice (see DESIGN.md); deep, muted plum/aubergine. */
+  --plum: oklch(0.36 0.085 337);
+  --plum-deep: oklch(0.3 0.09 337);
+  --plum-soft: oklch(0.94 0.02 337);
+
+  /* Fonts, wired in app/[locale]/layout.tsx; direction-aware overrides below.
+     Latin: Plus Jakarta Sans for UI/body, Fraunces (serif) for Display only.
+     Arabic: three self-hosted Thmanyah faces — Sans (UI/body), Serif Text
+     (long-form reading), Serif Display (hero/headline) — see DESIGN.md. */
+  --font-sans: var(--font-latin);
+  --font-display: var(--font-serif);
+  --font-reading: var(--font-latin);
+  /* Headline is deliberately its own token, decoupled from Display — Admin
+     page titles use font-heading and must keep rendering exactly as before
+     (Plus Jakarta Sans in Latin) now that Display means Fraunces. */
+  --font-heading: var(--font-latin);
+
+  /* shadcn semantic roles, mapped onto the brand palette above */
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: var(--ink);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: var(--ink);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--paper);
+  --secondary: var(--gold-soft);
+  --secondary-foreground: var(--ink);
+  --muted: var(--paper);
+  --muted-foreground: var(--ink-soft);
+  --accent: var(--gold);
+  --accent-foreground: var(--ink);
+  --destructive: var(--red-strong);
+  --border: oklch(0.921 0.008 73.74);
+  --input: oklch(0.921 0.008 73.74);
+  --ring: var(--gold);
+  --chart-1: var(--blue);
+  --chart-2: var(--green);
+  --chart-3: var(--gold);
+  --chart-4: var(--violet);
+  --chart-5: var(--red);
+  --radius: 1rem;
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: var(--paper);
+  --sidebar-accent: var(--gold-soft);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: oklch(0.921 0.008 73.74);
+  --sidebar-ring: var(--gold);
+}
+
+html[dir="rtl"] {
+  --font-sans: var(--font-arabic);
+  --font-display: var(--font-arabic-display);
+  --font-reading: var(--font-arabic-reading);
+  /* Preserves the exact pre-existing Admin Arabic heading face (unchanged by
+     this redesign) now that font-heading is its own token. */
+  --font-heading: var(--font-arabic-display);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.155 0.008 59.14);
+  --foreground: var(--paper);
+  --card: var(--ink);
+  --card-foreground: var(--paper);
+  --popover: var(--ink);
+  --popover-foreground: var(--paper);
+  --primary: var(--gold);
+  --primary-foreground: var(--ink);
+  --secondary: oklch(0.269 0.012 67.51);
+  --secondary-foreground: var(--paper);
+  --muted: oklch(0.269 0.012 67.51);
+  --muted-foreground: oklch(0.708 0.012 67.51);
+  --accent: oklch(0.771 0.144 69.41 / 18%);
+  --accent-foreground: var(--gold);
+  --destructive: var(--red-strong);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --ring: var(--gold);
+  --chart-1: var(--blue);
+  --chart-2: var(--green);
+  --chart-3: var(--gold);
+  --chart-4: var(--violet);
+  --chart-5: var(--red);
+  --sidebar: var(--ink);
+  --sidebar-foreground: var(--paper);
+  --sidebar-primary: var(--gold);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: oklch(0.269 0.012 67.51);
+  --sidebar-accent-foreground: var(--paper);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: var(--gold);
 }
 
 @layer base {
@@ -126,5 +211,48 @@
   }
   html {
     @apply font-sans;
+    caret-color: var(--gold-strong);
+    scrollbar-color: var(--border) transparent;
+    scrollbar-width: thin;
   }
+  ::selection {
+    background-color: var(--gold-soft);
+    color: var(--ink);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border: 2px solid var(--background);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--ink-soft);
+  }
+}
+
+/* Storefront ("Atelier Blanc") keyboard focus — the shared Gold ring at 50%
+   opacity reads at ~1.6:1 against white, below the 3:1 WCAG AA minimum for a
+   focus indicator. The storefront ground is pure white (DESIGN.md), so its
+   focus outline is Ink at full strength with a 2px offset, scoped to the
+   `.storefront` wrapper so Admin/POS keeps its documented Gold ring. */
+.storefront :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Admin/POS keyboard focus — the Gold ring reads at ~1.05:1 against paper,
+   below the 3:1 WCAG AA minimum (unlike the storefront, the admin shell's
+   content ground is paper, not white). Scope to `.admin` so the login form
+   outside the shell keeps its Gold ring: Ink outline at full strength, and
+   neutralize the Gold box-shadow rings the shadcn-style classes add. */
+.admin :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  --tw-ring-color: transparent;
 }

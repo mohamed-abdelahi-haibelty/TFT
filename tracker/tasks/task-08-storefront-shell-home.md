@@ -13,7 +13,7 @@ Task 07 (needs products + bundles to display).
 - Performance: no client JS beyond the locale switch and nav toggle; images lazy below the fold with correct sizes.
 
 ## Done when
-- [ ] Home renders in ar (RTL) and fr with real seeded data, served from cache (verify: DB not hit on repeat request in dev logs).
-- [ ] `sitemap.xml` lists product/bundle URLs for both locales.
-- [ ] Lighthouse mobile on home: Perf ≥ 90, A11y ≥ 95, SEO ≥ 95.
-- [ ] Build + tests pass.
+- [x] Home renders in ar (RTL) and fr with real seeded data, served from cache (verify: DB not hit on repeat request in dev logs).
+- [x] `sitemap.xml` lists product/bundle URLs for both locales.
+- [ ] Lighthouse mobile on home: Perf ≥ 90, A11y ≥ 95, SEO ≥ 95. — not automatable from this environment (no usable Chrome/Chromium for `chrome-launcher`; same class of gap as task 01b's Lighthouse caveat) — needs a manual pass.
+- [x] Build + tests pass.

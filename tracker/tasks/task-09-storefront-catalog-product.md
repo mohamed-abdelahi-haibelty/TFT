@@ -8,8 +8,8 @@ Task 08.
 
 ## Scope
 - `/[locale]/catalog` (+ `/catalog/[categorySlug]`): grid of active products; filters: category, price range, in-stock only; text search (matches ar + fr names); sort: newest, price asc/desc. Filters live in URL search params (shareable, back-button-safe); server-rendered results.
-- Product card: image, name, price with discount strike-through when discounted, stock badge (in stock / out of stock / out of stock–orderable when backorder).
-- `/[locale]/product/[slug]`: swipeable multi-image gallery with thumbnails; variant selector (shows variant images + variant stock when selected); quantity stepper bounded by available stock unless backorder; price incl. discount; description; add-to-cart button (cart itself is Task 11 — for now clicking stores the selection in the cart module's API and shows count in header).
+- Product card: image, name, effective price via pricing service (channel `web`) with base strike-through when reduced, promo countdown badge when a promo applies ("ends in Xd Xh Xm", client-ticking, cosmetic only), stock badge (in stock / out of stock / out of stock–orderable when backorder).
+- `/[locale]/product/[slug]`: swipeable multi-image gallery with thumbnails; variant selector (shows variant images + variant stock when selected); quantity stepper bounded by available stock unless backorder; effective price (pricing service, channel `web`) with strike-through base and promo countdown when applicable; description; add-to-cart button (cart itself is Task 11 — for now clicking stores the selection in the cart module's API and shows count in header).
 - Out-of-stock non-backorder: quantity + add disabled with stock badge explaining.
 - `generateMetadata` per product; JSON-LD `Product` with price/availability.
 - 404 for unknown/inactive slugs.

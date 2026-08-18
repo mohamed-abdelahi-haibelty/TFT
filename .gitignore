@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local tool state (design/critique cache, opencode CLI)
+/.impeccable/
+/.opencode/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

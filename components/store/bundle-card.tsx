@@ -1,0 +1,31 @@
+import { Gift } from "lucide-react";
+import { Link } from "@/src/i18n/navigation";
+import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
+import { formatMoney } from "@/src/lib/money";
+import type { StorefrontBundleCard } from "@/src/services/storefront";
+
+/** "Atelier Blanc": the same catalog-plate treatment as ProductCard — the "Boîtes prêtes" section heading already tells the visitor these are bundles, so the card itself carries no extra badge. */
+export function BundleCard({ bundle, name }: { bundle: StorefrontBundleCard; name: string }) {
+  return (
+    <Link href={`/boxes/${bundle.slug}`} className="group flex flex-col">
+      <div className="mb-4 flex aspect-square items-center justify-center border border-border p-6 transition-colors group-hover:border-ink">
+        {bundle.image ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed card transform
+          <img
+            src={buildCloudinaryUrl(bundle.image, "card")}
+            alt=""
+            width={400}
+            height={400}
+            loading="lazy"
+            decoding="async"
+            className="size-full object-contain mix-blend-multiply"
+          />
+        ) : (
+          <Gift className="size-8 text-ink-soft" aria-hidden="true" />
+        )}
+      </div>
+      <span className="text-sm font-medium text-ink">{name}</span>
+      <span className="mt-1 font-mono text-sm text-ink-soft">{formatMoney(bundle.effectivePrice)}</span>
+    </Link>
+  );
+}

@@ -17,7 +17,7 @@ Task 15.
 - Voided orders excluded everywhere; cancelled orders count only in status counts.
 
 ## Done when
-- [ ] Numbers match a hand-computed fixture scenario (integration test: mix of web delivered, POS delivered, cancelled, voided).
-- [ ] Staff hitting `/admin` is redirected to `/admin/orders`; direct service call → `FORBIDDEN`.
-- [ ] Month switch shows historical months correctly.
-- [ ] Build + tests pass.
+- [x] Numbers match a hand-computed fixture scenario (integration test: mix of web delivered, POS delivered, cancelled, voided).
+- [x] Staff hitting `/admin` is redirected to `/admin/orders`; direct service call → `FORBIDDEN`.
+- [x] Month switch shows historical months correctly.
+- [x] Build + tests pass.

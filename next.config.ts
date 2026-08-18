@@ -4,7 +4,12 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  images: {
+    loader: "custom",
+    loaderFile: "./src/lib/cloudinary-image-loader.ts",
+  },
+};
 
 export default withSentryConfig(withNextIntl(nextConfig), {
   silent: true,

@@ -11,9 +11,11 @@ Task 05.
 - Label view `/admin/products/[id]/label` (and per variant / bundle): renders label(s) containing barcode, product name (French), price. Sized for common 40×30 mm thermal labels, with a count input to render N copies on one page for batch printing.
 - "Print label" action on product list and product form; browser print stylesheet so printing the page yields clean labels only (workflow: print/share this page via the thermal printer's app — no direct Bluetooth printing).
 - Barcode value = SKU exactly (what the scanner will type in POS).
+- Counter barcode sheet `/admin/labels/sheet`: multi-select products/variants/bundles (search + category filter, selection persisted per user) → printable scan-card grid (barcode + name + price per cell, ~24–30 cells per A4, print stylesheet paginates automatically across pages — no item cap; cells never split across a page break). Footer on each page: category/selection name + print date. Purpose: small loose items (pens, erasers…) are never labeled individually — staff scans these laminated/sleeved sheets in a counter binder instead. Sheets are re-printable anytime as items change.
 
 ## Done when
-- [ ] Label page for a product with variants shows one label per variant with distinct SKUs.
-- [ ] Barcode PNG endpoint rejects unauthenticated requests.
-- [ ] Generated barcode for a known SKU decodes back to that SKU (unit test via bwip-js round-trip or fixture).
-- [ ] Build + tests pass.
+- [x] Label page for a product with variants shows one label per variant with distinct SKUs.
+- [x] Barcode PNG endpoint rejects unauthenticated requests.
+- [x] Generated barcode for a known SKU decodes back to that SKU (unit test via bwip-js round-trip or fixture).
+- [x] Counter sheet with 12 selected items prints as a clean A4 grid; selection survives reload.
+- [x] Build + tests pass.
