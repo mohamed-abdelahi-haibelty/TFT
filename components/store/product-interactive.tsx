@@ -25,6 +25,9 @@ export type InteractiveVariant = {
 export type ProductInteractiveProps = {
   productId: string;
   slug: string;
+  sku: string;
+  /** Absolute, locale-prefixed URL to this product page — built server-side (`absoluteUrl`) since `src/lib/site.ts` pulls in server-only env vars. Included in the WhatsApp ask message so the chat gets a link-preview card with the product photo. */
+  productUrl: string;
   name: string;
   /** Both locales, carried purely so the cart line can be re-rendered in either — see `cartItemName`. */
   nameAr: string;
@@ -53,6 +56,8 @@ const BACKORDER_QTY_CAP = 99;
 export function ProductInteractive({
   productId,
   slug,
+  sku,
+  productUrl,
   name,
   nameAr,
   nameFr,
@@ -90,7 +95,7 @@ export function ProductInteractive({
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? null;
-  const askUrl = buildWhatsAppUrl(whatsappNumber, t("askMessage", { name }));
+  const askUrl = buildWhatsAppUrl(whatsappNumber, t("askMessage", { name, sku, url: productUrl }));
 
   const activeImages = selectedVariant?.images.length ? selectedVariant.images : images;
   const activeImage = activeImages[imageIndex] ?? activeImages[0] ?? null;

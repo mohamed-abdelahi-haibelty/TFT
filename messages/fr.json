@@ -82,7 +82,7 @@
     "maxQtyHint": "Quantité maximale : {max}",
     "askTitle": "Une question sur ce produit ?",
     "askCta": "Demander sur WhatsApp",
-    "askMessage": "Bonjour, j’ai une question sur : {name}"
+    "askMessage": "Bonjour, j’ai une question sur : {name} (réf. {sku})\n{url}"
   },
   "boxes": {
     "seo": {

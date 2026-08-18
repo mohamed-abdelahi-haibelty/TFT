@@ -56,6 +56,7 @@ export default async function ProductPage({
   const description = localized(locale, product.descriptionAr ?? "", product.descriptionFr ?? "");
   const categoryName = localized(locale, product.categoryNameAr, product.categoryNameFr);
   const status = deriveStockStatus(product.stockQty, product.allowBackorder);
+  const productUrl = absoluteUrl(locale, `/product/${product.slug}`);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -71,7 +72,7 @@ export default async function ProductPage({
       availability: `https://schema.org/${
         status === "in-stock" ? "InStock" : status === "backorder" ? "BackOrder" : "OutOfStock"
       }`,
-      url: absoluteUrl(locale, `/product/${product.slug}`),
+      url: productUrl,
     },
   };
 
@@ -92,6 +93,8 @@ export default async function ProductPage({
       <ProductInteractive
         productId={product.id}
         slug={product.slug}
+        sku={product.sku}
+        productUrl={productUrl}
         name={name}
         nameAr={product.nameAr}
         nameFr={product.nameFr}
