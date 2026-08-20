@@ -470,7 +470,7 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
               onChange={(event) => updateField("name", event.target.value)}
               aria-invalid={!!fieldErrors.name}
               aria-describedby={fieldErrors.name ? "checkout-name-error" : undefined}
-              className={`mt-2 h-12 w-full rounded-[2px] border bg-transparent px-3.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+              className={`mt-2 h-12 w-full rounded-[2px] border bg-transparent px-3.5 text-base text-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:text-sm ${
                 fieldErrors.name ? "border-plum" : "border-border focus:border-ink"
               }`}
             />
@@ -507,7 +507,7 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
                 onChange={(event) => updateField("phone", event.target.value.replace(/\D/g, "").slice(0, 8))}
                 aria-invalid={!!fieldErrors.phone}
                 aria-describedby={fieldErrors.phone ? "checkout-phone-error" : "checkout-phone-hint"}
-                className="h-full min-w-0 flex-1 bg-transparent px-3.5 font-mono text-sm text-ink outline-none"
+                className="h-full min-w-0 flex-1 bg-transparent px-3.5 font-mono text-base text-ink outline-none md:text-sm"
               />
             </div>
             {fieldErrors.phone ? (
@@ -584,7 +584,7 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
               rows={3}
               value={form.note}
               onChange={(event) => updateField("note", event.target.value)}
-              className="mt-2 w-full resize-none rounded-[2px] border border-border bg-transparent px-3.5 py-3 text-sm text-ink outline-none focus:border-ink focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="mt-2 w-full resize-none rounded-[2px] border border-border bg-transparent px-3.5 py-3 text-base text-ink outline-none focus:border-ink focus-visible:ring-2 focus-visible:ring-ring/50 md:text-sm"
             />
           </div>
 

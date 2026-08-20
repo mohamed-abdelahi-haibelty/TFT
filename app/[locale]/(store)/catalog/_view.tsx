@@ -58,11 +58,11 @@ export async function CatalogView({
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
       {categories.length > 0 && (
-        <div className="mb-8 flex gap-8 overflow-x-auto mask-[linear-gradient(to_right,transparent,black_24px,black_calc(100%-24px),transparent)]">
+        <div className="mb-8 flex snap-x snap-proximity gap-8 overflow-x-auto touch-pan-x mask-[linear-gradient(to_right,transparent,black_24px,black_calc(100%-24px),transparent)]">
           <Link
             href="/catalog"
             aria-current={!categorySlug ? "page" : undefined}
-            className={`border-b-2 pb-2 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-plum hover:text-ink ${
+            className={`shrink-0 snap-start border-b-2 pb-2 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-plum hover:text-ink ${
               !categorySlug ? "border-plum text-ink" : "border-transparent text-ink-soft"
             }`}
           >

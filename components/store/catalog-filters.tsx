@@ -38,7 +38,7 @@ export async function CatalogFilters({
   const t = await getTranslations({ locale, namespace: "catalog.filters" });
 
   const fieldClass =
-    "h-11 rounded-[2px] border border-border bg-background px-3 text-sm text-ink outline-none focus-visible:border-ink";
+    "h-11 rounded-[2px] border border-border bg-background px-3 text-base text-ink outline-none focus-visible:border-ink md:text-sm";
   const labelClass = "text-xs font-semibold tracking-[0.04em] text-ink-soft uppercase";
   const hasActiveFilters = Boolean(
     values.q || values.min || values.max || values.stock === "1" || (values.sort && values.sort !== "newest"),

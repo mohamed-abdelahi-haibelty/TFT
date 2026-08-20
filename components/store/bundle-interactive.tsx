@@ -121,7 +121,7 @@ export function BundleInteractive({
       {/* Gallery — smaller and secondary, matching the manifest-led structure. */}
       <div className="flex flex-col gap-3">
         <div
-          className="relative flex aspect-square items-center justify-center border border-border p-6"
+          className="relative flex aspect-square touch-manipulation items-center justify-center border border-border p-6"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
@@ -148,7 +148,7 @@ export function BundleInteractive({
                 type="button"
                 onClick={() => showImage(imageIndex - 1)}
                 aria-label={t("previousImage")}
-                className="absolute start-2 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center border border-ink bg-background text-ink transition-colors hover:bg-ink hover:text-paper"
+                className="absolute start-2 top-1/2 flex size-11 -translate-y-1/2 touch-manipulation items-center justify-center border border-ink bg-background text-ink transition-colors hover:bg-ink hover:text-paper"
               >
                 <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
               </button>
@@ -156,7 +156,7 @@ export function BundleInteractive({
                 type="button"
                 onClick={() => showImage(imageIndex + 1)}
                 aria-label={t("nextImage")}
-                className="absolute end-2 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center border border-ink bg-background text-ink transition-colors hover:bg-ink hover:text-paper"
+                className="absolute end-2 top-1/2 flex size-11 -translate-y-1/2 touch-manipulation items-center justify-center border border-ink bg-background text-ink transition-colors hover:bg-ink hover:text-paper"
               >
                 <ChevronRight className="size-4 rtl:rotate-180" aria-hidden="true" />
               </button>
@@ -173,7 +173,7 @@ export function BundleInteractive({
                 onClick={() => showImage(index)}
                 aria-label={t("thumbnailLabel", { index: index + 1 })}
                 aria-current={index === imageIndex}
-                className={`flex size-14 shrink-0 items-center justify-center border p-2 transition-colors ${
+                className={`flex size-14 shrink-0 touch-manipulation items-center justify-center border p-2 transition-colors ${
                   index === imageIndex ? "border-ink" : "border-border hover:border-ink"
                 }`}
               >

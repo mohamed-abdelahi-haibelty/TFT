@@ -11,7 +11,7 @@ export function CategoryChip({ slug, name, active = false }: { slug: string; nam
     <Link
       href={`/catalog/${slug}`}
       aria-current={active ? "page" : undefined}
-      className={`inline-flex min-h-11 items-end border-b-2 pb-2 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-plum hover:text-ink ${
+      className={`inline-flex min-h-11 shrink-0 snap-start items-end border-b-2 pb-2 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-plum hover:text-ink ${
         active ? "border-plum text-ink" : "border-transparent text-ink-soft"
       }`}
     >

@@ -140,7 +140,7 @@ export async function TrackView({ locale, code, phone }: { locale: string; code?
               defaultValue={codeDefault}
               placeholder={t("form.codePlaceholder")}
               dir="ltr"
-              className="mt-2 h-12 w-full rounded-[2px] border border-border bg-transparent px-3.5 font-mono text-sm text-ink uppercase outline-none placeholder:normal-case placeholder:text-ink-soft/60 focus:border-ink focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="mt-2 h-12 w-full rounded-[2px] border border-border bg-transparent px-3.5 font-mono text-base text-ink uppercase outline-none placeholder:normal-case placeholder:text-ink-soft/60 focus:border-ink focus-visible:ring-2 focus-visible:ring-ring/50 md:text-sm"
             />
           </div>
 
@@ -163,7 +163,7 @@ export async function TrackView({ locale, code, phone }: { locale: string; code?
                 maxLength={8}
                 defaultValue={phoneDefault}
                 aria-describedby="track-phone-hint"
-                className="h-full flex-1 bg-transparent px-3.5 font-mono text-sm text-ink outline-none"
+                className="h-full flex-1 bg-transparent px-3.5 font-mono text-base text-ink outline-none md:text-sm"
               />
             </div>
             <p id="track-phone-hint" className="mt-1.5 text-xs text-ink-soft">

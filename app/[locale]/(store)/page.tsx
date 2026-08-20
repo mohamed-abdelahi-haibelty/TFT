@@ -178,7 +178,7 @@ export default async function HomePage({
               is short because the chips pack to the start and the faded strip
               falls on empty space. Mirrored for RTL; CSS masks have no logical
               direction of their own. */}
-          <div className="flex gap-8 overflow-x-auto mask-[linear-gradient(to_right,black_calc(100%-24px),transparent)] rtl:mask-[linear-gradient(to_left,black_calc(100%-24px),transparent)]">
+          <div className="flex snap-x snap-proximity gap-8 overflow-x-auto touch-pan-x mask-[linear-gradient(to_right,black_calc(100%-24px),transparent)] rtl:mask-[linear-gradient(to_left,black_calc(100%-24px),transparent)]">
             {categories.map((category) => (
               <CategoryChip
                 key={category.id}
