@@ -2,7 +2,17 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db } from "@/src/db/client";
-import { bundleItems, bundles, orderEvents, orderItems, orders, productVariants, products } from "@/src/db/schema";
+import {
+  bundleItems,
+  bundles,
+  categories,
+  orderEvents,
+  orderItems,
+  orders,
+  productImages,
+  productVariants,
+  products,
+} from "@/src/db/schema";
 import { type AvailabilityComponent, deriveMaxSellable } from "@/src/lib/bundle-availability";
 import type { ServiceResult } from "@/src/lib/errors";
 import { localized } from "@/src/lib/locale-text";
@@ -47,7 +57,26 @@ export type PosQuickPickItem = {
   promo: boolean;
   stockQty: number;
   allowBackorder: boolean;
+  categoryId: string;
+  imagePublicId: string | null;
 };
+
+/** First image (by `sort`) for each of the given products, keyed by product id. */
+async function firstImageByProduct(productIds: string[]): Promise<Map<string, string>> {
+  if (productIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({ productId: productImages.productId, publicId: productImages.publicId })
+    .from(productImages)
+    .where(inArray(productImages.productId, productIds))
+    .orderBy(asc(productImages.sort), asc(productImages.createdAt));
+
+  const byProduct = new Map<string, string>();
+  for (const row of rows) {
+    if (!byProduct.has(row.productId)) byProduct.set(row.productId, row.publicId);
+  }
+  return byProduct;
+}
 
 /** Active, pinned products only, in the admin-managed order — task 14: "products flagged `is_quick_pick`, ordered by `quick_pick_sort`." Both roles read this; only `products.ts`'s `toggleQuickPick`/`reorderQuickPicks` (admin-only) can change it. */
 export async function listPosQuickPicks(locale: string): Promise<ServiceResult<PosQuickPickItem[]>> {
@@ -59,6 +88,8 @@ export async function listPosQuickPicks(locale: string): Promise<ServiceResult<P
     .from(products)
     .where(and(eq(products.isQuickPick, true), eq(products.isActive, true)))
     .orderBy(asc(products.quickPickSort), asc(products.createdAt));
+
+  const imageByProduct = await firstImageByProduct(rows.map((r) => r.id));
 
   const now = new Date();
   const items = await Promise.all(
@@ -76,6 +107,8 @@ export async function listPosQuickPicks(locale: string): Promise<ServiceResult<P
         promo: !!effective.promo,
         stockQty: product.stockQty,
         allowBackorder: product.allowBackorder,
+        categoryId: product.categoryId,
+        imagePublicId: imageByProduct.get(product.id) ?? null,
       };
     }),
   );
@@ -83,9 +116,32 @@ export async function listPosQuickPicks(locale: string): Promise<ServiceResult<P
   return { ok: true, data: items };
 }
 
+// --- Categories ----------------------------------------------------------
+
+export type PosCategory = { id: string; name: string; slug: string };
+
+/** Category tabs for POS browsing, in the admin-managed catalog order. */
+export async function listPosCategories(locale: string): Promise<ServiceResult<PosCategory[]>> {
+  const auth = await requirePermission("pos.use");
+  if (!auth.ok) return auth;
+
+  const rows = await db.select().from(categories).orderBy(asc(categories.sort), asc(categories.createdAt));
+
+  return {
+    ok: true,
+    data: rows.map((row) => ({ id: row.id, name: localized(locale, row.nameAr, row.nameFr), slug: row.slug })),
+  };
+}
+
 // --- Manual fallback: search-by-name over the whole active catalog ------
 
-export type PosCatalogItem = { kind: "product" | "bundle"; sku: string; name: string };
+export type PosCatalogItem = {
+  kind: "product" | "bundle";
+  sku: string;
+  name: string;
+  categoryId: string | null;
+  imagePublicId: string | null;
+};
 
 /** Lightweight name+SKU index for the manual picker (damaged/missing labels) — client-filters this list, same "shop-scale catalog, filter client-side" convention as the counter-sheet (task 06) and order item picker (task 13). Selecting a result re-scans by its SKU, so it's the identical code path as a physical scan. */
 export async function listPosCatalog(locale: string): Promise<ServiceResult<PosCatalogItem[]>> {
@@ -94,7 +150,7 @@ export async function listPosCatalog(locale: string): Promise<ServiceResult<PosC
 
   const [productRows, variantRows, bundleRows] = await Promise.all([
     db
-      .select({ sku: products.sku, nameAr: products.nameAr, nameFr: products.nameFr })
+      .select({ id: products.id, sku: products.sku, nameAr: products.nameAr, nameFr: products.nameFr, categoryId: products.categoryId })
       .from(products)
       .where(eq(products.isActive, true)),
     db
@@ -102,8 +158,10 @@ export async function listPosCatalog(locale: string): Promise<ServiceResult<PosC
         sku: productVariants.sku,
         variantNameAr: productVariants.nameAr,
         variantNameFr: productVariants.nameFr,
+        productId: products.id,
         productNameAr: products.nameAr,
         productNameFr: products.nameFr,
+        categoryId: products.categoryId,
       })
       .from(productVariants)
       .innerJoin(products, eq(productVariants.productId, products.id))
@@ -114,14 +172,30 @@ export async function listPosCatalog(locale: string): Promise<ServiceResult<PosC
       .where(eq(bundles.isActive, true)),
   ]);
 
+  const imageByProduct = await firstImageByProduct([...productRows.map((r) => r.id), ...variantRows.map((r) => r.productId)]);
+
   const items: PosCatalogItem[] = [
-    ...productRows.map((row) => ({ kind: "product" as const, sku: row.sku, name: localized(locale, row.nameAr, row.nameFr) })),
+    ...productRows.map((row) => ({
+      kind: "product" as const,
+      sku: row.sku,
+      name: localized(locale, row.nameAr, row.nameFr),
+      categoryId: row.categoryId,
+      imagePublicId: imageByProduct.get(row.id) ?? null,
+    })),
     ...variantRows.map((row) => ({
       kind: "product" as const,
       sku: row.sku,
       name: `${localized(locale, row.productNameAr, row.productNameFr)} — ${localized(locale, row.variantNameAr, row.variantNameFr)}`,
+      categoryId: row.categoryId,
+      imagePublicId: imageByProduct.get(row.productId) ?? null,
     })),
-    ...bundleRows.map((row) => ({ kind: "bundle" as const, sku: row.sku, name: localized(locale, row.nameAr, row.nameFr) })),
+    ...bundleRows.map((row) => ({
+      kind: "bundle" as const,
+      sku: row.sku,
+      name: localized(locale, row.nameAr, row.nameFr),
+      categoryId: null,
+      imagePublicId: null,
+    })),
   ];
 
   items.sort((a, b) => a.name.localeCompare(b.name, locale === "ar" ? "ar" : "fr"));

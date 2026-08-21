@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, CheckCircle2, Minus, Plus, RotateCcw, ScanLine, Search, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Minus, Package, Plus, RotateCcw, ScanLine, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 import { playScanError, playScanSuccess } from "@/src/lib/pos-sound";
 import { useRouter } from "@/src/i18n/navigation";
 import { completeSaleAction, resolvePosScanAction } from "@/src/services/pos-actions";
-import type { PosCatalogItem, PosQuickPickItem, PosResolvedLine } from "@/src/services/pos";
+import type { PosCatalogItem, PosCategory, PosQuickPickItem, PosResolvedLine } from "@/src/services/pos";
 
 type PaymentMethod = "cash" | "bankily" | "masrvi" | "sedad" | "other";
 const PAYMENT_METHODS: PaymentMethod[] = ["cash", "bankily", "masrvi", "sedad", "other"];
@@ -39,7 +40,7 @@ type CartLine = {
 
 type RemovedLine = { nameSnapshot: string; unitPrice: number; qty: number; reason: (typeof REMOVE_REASONS)[number] };
 
-type PendingOverride = PosResolvedLine & { existingKey?: string };
+type PendingOverride = PosResolvedLine & { existingKey?: string; targetQty?: number };
 
 type ScanFeedback =
   | { type: "success"; name: string; id: number }
@@ -49,6 +50,30 @@ type ScanFeedback =
 
 function lineKey(line: { productId: string | null; variantId: string | null; bundleId: string | null }): string {
   return line.variantId ?? line.bundleId ?? line.productId ?? "";
+}
+
+function ProductThumb({ imagePublicId, size }: { imagePublicId: string | null; size: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-paper"
+      style={{ width: size, height: size }}
+    >
+      {imagePublicId ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed thumbnail transform
+        <img
+          src={buildCloudinaryUrl(imagePublicId, "thumbnail")}
+          alt=""
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          className="size-full object-contain"
+        />
+      ) : (
+        <Package className="size-1/2 text-ink-soft" aria-hidden="true" />
+      )}
+    </span>
+  );
 }
 
 function QuickPickTile({
@@ -69,42 +94,148 @@ function QuickPickTile({
       disabled={disabled}
       onClick={() => onPick(item.sku)}
       className={cn(
-        "flex min-h-24 flex-col items-start justify-between gap-1 rounded-2xl border border-border p-3.5 text-start transition-colors",
+        "flex min-h-24 items-start gap-3 rounded-2xl border border-border p-3.5 text-start transition-colors",
         "hover:border-gold hover:bg-gold-soft/40 focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30 focus-visible:outline-none",
         "disabled:pointer-events-none disabled:opacity-50",
       )}
     >
-      <span className="text-sm font-medium text-ink">{item.name}</span>
-      <span className="flex items-center gap-1.5">
-        <span className="font-mono text-sm text-ink-soft">{formatMoney(item.unitPrice)}</span>
-        {isOut ? (
-          <span className="inline-flex items-center rounded-full bg-red-bg px-1.5 py-0.5 text-xs font-semibold text-red-text">
-            {t("outOfStock")}
-          </span>
-        ) : null}
+      <ProductThumb imagePublicId={item.imagePublicId} size={40} />
+      <span className="flex flex-1 flex-col items-start justify-between gap-1">
+        <span className="text-sm font-medium text-ink">{item.name}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="font-mono text-sm text-ink-soft">{formatMoney(item.unitPrice)}</span>
+          {isOut ? (
+            <span className="inline-flex items-center rounded-full bg-red-bg px-1.5 py-0.5 text-xs font-semibold text-red-text">
+              {t("outOfStock")}
+            </span>
+          ) : null}
+        </span>
       </span>
     </button>
+  );
+}
+
+function CatalogResultRow({
+  item,
+  disabled,
+  onPick,
+}: {
+  item: PosCatalogItem;
+  disabled: boolean;
+  onPick: (sku: string) => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onPick(item.sku)}
+        className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-start text-sm text-ink transition-colors hover:bg-paper disabled:opacity-50"
+      >
+        <ProductThumb imagePublicId={item.imagePublicId} size={32} />
+        <span className="flex-1">{item.name}</span>
+        <span className="font-mono text-xs text-ink-soft">{item.sku}</span>
+      </button>
+    </li>
+  );
+}
+
+function CategoryTabs({
+  categories,
+  selectedId,
+  onSelect,
+  t,
+}: {
+  categories: PosCategory[];
+  selectedId: string | "all";
+  onSelect: (id: string | "all") => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  if (categories.length === 0) return null;
+  return (
+    <div className="flex snap-x snap-proximity gap-5 overflow-x-auto pb-1 touch-pan-x">
+      <button
+        type="button"
+        onClick={() => onSelect("all")}
+        className={cn(
+          "shrink-0 snap-start border-b-2 pb-1.5 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-gold hover:text-ink",
+          selectedId === "all" ? "border-gold text-ink" : "border-transparent text-ink-soft",
+        )}
+      >
+        {t("categoryAllLabel")}
+      </button>
+      {categories.map((category) => (
+        <button
+          key={category.id}
+          type="button"
+          onClick={() => onSelect(category.id)}
+          className={cn(
+            "shrink-0 snap-start border-b-2 pb-1.5 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-gold hover:text-ink",
+            selectedId === category.id ? "border-gold text-ink" : "border-transparent text-ink-soft",
+          )}
+        >
+          {category.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function QtyEditorInput({ qty, onCommit, onCancel }: { qty: number; onCommit: (qty: number) => void; onCancel: () => void }) {
+  const [draft, setDraft] = useState(String(qty));
+
+  function commit() {
+    const parsed = Number.parseInt(draft, 10);
+    onCommit(Number.isFinite(parsed) ? parsed : qty);
+  }
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={1}
+      max={99}
+      autoFocus
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+        } else if (event.key === "Escape") {
+          onCancel();
+        }
+      }}
+      className="h-7 w-12 rounded-md border border-border text-center font-mono text-sm text-ink outline-none focus-visible:border-gold"
+    />
   );
 }
 
 function SaleLineRow({
   line,
   removing,
+  editingQty,
   t,
   onIncrement,
   onDecrement,
   onRequestRemove,
   onConfirmRemove,
   onCancelRemove,
+  onStartEditQty,
+  onCommitQty,
 }: {
   line: CartLine;
   removing: boolean;
+  editingQty: boolean;
   t: ReturnType<typeof useTranslations>;
   onIncrement: (key: string) => void;
   onDecrement: (key: string) => void;
   onRequestRemove: (key: string) => void;
   onConfirmRemove: (key: string, reason: (typeof REMOVE_REASONS)[number]) => void;
   onCancelRemove: () => void;
+  onStartEditQty: (key: string) => void;
+  onCommitQty: (key: string, qty: number) => void;
 }) {
   return (
     <li className="flex flex-col gap-2 border-b border-border py-3 last:border-0">
@@ -134,7 +265,22 @@ function SaleLineRow({
           >
             <Minus className="size-4" aria-hidden="true" />
           </button>
-          <span className="min-w-6 text-center font-mono text-sm text-ink">{line.qty}</span>
+          {editingQty ? (
+            <QtyEditorInput
+              qty={line.qty}
+              onCommit={(qty) => onCommitQty(line.key, qty)}
+              onCancel={() => onCommitQty(line.key, line.qty)}
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label={t("qtyEditLabel")}
+              onClick={() => onStartEditQty(line.key)}
+              className="min-w-6 px-1 text-center font-mono text-sm text-ink hover:text-gold-strong"
+            >
+              {line.qty}
+            </button>
+          )}
           <button
             type="button"
             aria-label={t("qtyIncrease")}
@@ -191,9 +337,11 @@ function SaleLineRow({
 export function PosScanView({
   quickPicks,
   catalog,
+  categories,
 }: {
   quickPicks: PosQuickPickItem[];
   catalog: PosCatalogItem[];
+  categories: PosCategory[];
 }) {
   const t = useTranslations("admin.pos");
   const tCommon = useTranslations("common");
@@ -204,9 +352,10 @@ export function PosScanView({
   const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
   const [scanValue, setScanValue] = useState("");
   const [scanning, setScanning] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
   const [manualQuery, setManualQuery] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | "all">("all");
   const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const [editingQtyKey, setEditingQtyKey] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
@@ -327,7 +476,13 @@ export function PosScanView({
   function confirmOverride() {
     if (!feedback || feedback.type !== "stock_warning") return;
     const { pending } = feedback;
-    commitAdd(pending, pending.existingKey, true);
+    if (pending.existingKey && pending.targetQty !== undefined) {
+      const targetQty = pending.targetQty;
+      setLines((prev) => prev.map((l) => (l.key === pending.existingKey ? { ...l, qty: targetQty, overridden: true } : l)));
+      setFeedback(null);
+    } else {
+      commitAdd(pending, pending.existingKey, true);
+    }
     focusScanInput();
   }
 
@@ -336,10 +491,13 @@ export function PosScanView({
     focusScanInput();
   }
 
-  function incrementLine(key: string) {
+  /** Sets a cart line to an exact quantity (bulk-entry or the +/- steppers), warning past available stock the same way a physical scan does. */
+  function setLineQty(key: string, rawQty: number) {
     const line = linesRef.current.find((l) => l.key === key);
     if (!line) return;
-    const wouldExceed = !line.allowBackorder && line.stockQty !== null && line.qty + 1 > line.stockQty && !line.overridden;
+    const qty = Math.max(1, Math.min(99, Math.round(rawQty) || 1));
+    const wouldExceed = !line.allowBackorder && line.stockQty !== null && qty > line.stockQty && !line.overridden;
+
     if (wouldExceed) {
       setFeedback({
         type: "stock_warning",
@@ -355,17 +513,34 @@ export function PosScanView({
           stockQty: line.stockQty,
           allowBackorder: line.allowBackorder,
           existingKey: key,
+          targetQty: qty,
         },
         id: Date.now(),
       });
       playScanError();
       return;
     }
-    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, qty: l.qty + 1 } : l)));
+
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, qty } : l)));
+  }
+
+  function incrementLine(key: string) {
+    const line = linesRef.current.find((l) => l.key === key);
+    if (!line) return;
+    setLineQty(key, line.qty + 1);
   }
 
   function decrementLine(key: string) {
     setLines((prev) => prev.map((l) => (l.key === key && l.qty > 1 ? { ...l, qty: l.qty - 1 } : l)));
+  }
+
+  function startEditQty(key: string) {
+    setEditingQtyKey(key);
+  }
+
+  function commitQtyEdit(key: string, qty: number) {
+    setEditingQtyKey(null);
+    setLineQty(key, qty);
   }
 
   function requestRemove(key: string) {
@@ -427,11 +602,19 @@ export function PosScanView({
     focusScanInput();
   }
 
+  const categoryFilteredQuickPicks = useMemo(
+    () => (selectedCategoryId === "all" ? quickPicks : quickPicks.filter((item) => item.categoryId === selectedCategoryId)),
+    [quickPicks, selectedCategoryId],
+  );
+
+  const isSearching = manualQuery.trim().length > 0;
+
   const filteredCatalog = useMemo(() => {
     const term = manualQuery.trim().toLowerCase();
-    if (!term) return catalog.slice(0, 30);
-    return catalog.filter((item) => item.name.toLowerCase().includes(term) || item.sku.toLowerCase().includes(term)).slice(0, 30);
-  }, [catalog, manualQuery]);
+    const byCategory = selectedCategoryId === "all" ? catalog : catalog.filter((item) => item.categoryId === selectedCategoryId);
+    if (!term) return byCategory.slice(0, 30);
+    return byCategory.filter((item) => item.name.toLowerCase().includes(term) || item.sku.toLowerCase().includes(term)).slice(0, 30);
+  }, [catalog, manualQuery, selectedCategoryId]);
 
   const total = lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
 
@@ -509,63 +692,43 @@ export function PosScanView({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-heading text-lg font-semibold text-ink">{t("quickPicksTitle")}</h2>
-            <Button type="button" variant="secondary" size="sm" className="rounded-full gap-1.5" onClick={() => setManualOpen((v) => !v)}>
-              <Search className="size-3.5" aria-hidden="true" />
-              {t("manualSearchToggle")}
-            </Button>
+          <div className="relative">
+            <Search className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-soft" aria-hidden="true" />
+            <input
+              type="search"
+              value={manualQuery}
+              onChange={(event) => setManualQuery(event.target.value)}
+              placeholder={t("manualSearchPlaceholder")}
+              className="h-11 w-full rounded-full border border-border ps-10 pe-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+            />
           </div>
 
-          {quickPicks.length === 0 ? (
-            <p className="text-sm text-ink-soft">{t("quickPicksEmpty")}</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {quickPicks.map((item) => (
-                <QuickPickTile key={item.id} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} t={t} />
-              ))}
-            </div>
-          )}
+          <CategoryTabs categories={categories} selectedId={selectedCategoryId} onSelect={setSelectedCategoryId} t={t} />
 
-          {manualOpen ? (
-            <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-ink">{t("manualSearchTitle")}</h3>
-                <button type="button" aria-label={t("manualSearchClose")} onClick={() => setManualOpen(false)} className="text-ink-soft hover:text-ink">
-                  <X className="size-4" aria-hidden="true" />
-                </button>
-              </div>
-              <input
-                type="search"
-                value={manualQuery}
-                onChange={(event) => setManualQuery(event.target.value)}
-                placeholder={t("manualSearchPlaceholder")}
-                className="h-10 w-full rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
-              />
-              {filteredCatalog.length === 0 ? (
-                <p className="text-sm text-ink-soft">{t("manualSearchEmpty")}</p>
+          {isSearching ? (
+            filteredCatalog.length === 0 ? (
+              <p className="text-sm text-ink-soft">{t("manualSearchEmpty")}</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {filteredCatalog.map((item) => (
+                  <CatalogResultRow key={item.sku} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} />
+                ))}
+              </ul>
+            )
+          ) : (
+            <>
+              <h2 className="font-heading text-lg font-semibold text-ink">{t("quickPicksTitle")}</h2>
+              {categoryFilteredQuickPicks.length === 0 ? (
+                <p className="text-sm text-ink-soft">{t("quickPicksEmpty")}</p>
               ) : (
-                <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-                  {filteredCatalog.map((item) => (
-                    <li key={item.sku}>
-                      <button
-                        type="button"
-                        disabled={scanning}
-                        onClick={() => {
-                          setManualOpen(false);
-                          void handleScan(item.sku);
-                        }}
-                        className="flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-2 text-start text-sm text-ink transition-colors hover:bg-paper disabled:opacity-50"
-                      >
-                        <span>{item.name}</span>
-                        <span className="font-mono text-xs text-ink-soft">{item.sku}</span>
-                      </button>
-                    </li>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {categoryFilteredQuickPicks.map((item) => (
+                    <QuickPickTile key={item.id} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} t={t} />
                   ))}
-                </ul>
+                </div>
               )}
-            </div>
-          ) : null}
+            </>
+          )}
         </div>
 
         <div className="flex flex-col gap-4 rounded-lg border border-border p-5 lg:sticky lg:top-4">
@@ -605,9 +768,12 @@ export function PosScanView({
                   key={line.key}
                   line={line}
                   removing={removingKey === line.key}
+                  editingQty={editingQtyKey === line.key}
                   t={t}
                   onIncrement={incrementLine}
                   onDecrement={decrementLine}
+                  onStartEditQty={startEditQty}
+                  onCommitQty={commitQtyEdit}
                   onRequestRemove={requestRemove}
                   onConfirmRemove={confirmRemove}
                   onCancelRemove={cancelRemove}
