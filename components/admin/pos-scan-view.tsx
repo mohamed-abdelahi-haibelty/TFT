@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, CheckCircle2, Minus, Package, Plus, RotateCcw, ScanLine, Search, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Minus, Package, Plus, RotateCcw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
@@ -10,7 +10,7 @@ import { formatMoney } from "@/src/lib/money";
 import { playScanError, playScanSuccess } from "@/src/lib/pos-sound";
 import { useRouter } from "@/src/i18n/navigation";
 import { completeSaleAction, resolvePosScanAction } from "@/src/services/pos-actions";
-import type { PosCatalogItem, PosCategory, PosQuickPickItem, PosResolvedLine } from "@/src/services/pos";
+import type { PosCategory, PosGridItem, PosResolvedLine } from "@/src/services/pos";
 
 type PaymentMethod = "cash" | "bankily" | "masrvi" | "sedad" | "other";
 const PAYMENT_METHODS: PaymentMethod[] = ["cash", "bankily", "masrvi", "sedad", "other"];
@@ -52,91 +52,70 @@ function lineKey(line: { productId: string | null; variantId: string | null; bun
   return line.variantId ?? line.bundleId ?? line.productId ?? "";
 }
 
-function ProductThumb({ imagePublicId, size }: { imagePublicId: string | null; size: number }) {
-  return (
-    <span
-      className="flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-paper"
-      style={{ width: size, height: size }}
-    >
-      {imagePublicId ? (
-        // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed card transform (stays crisp at this display size)
-        <img
-          src={buildCloudinaryUrl(imagePublicId, "card")}
-          alt=""
-          width={size}
-          height={size}
-          loading="lazy"
-          decoding="async"
-          className="size-full object-contain"
-        />
-      ) : (
-        <Package className="size-1/2 text-ink-soft" aria-hidden="true" />
-      )}
-    </span>
-  );
-}
-
-function QuickPickTile({
+/**
+ * The one product tile the whole browsing grid renders — quick picks and
+ * catalog/search results alike — so a cashier reads exactly one visual
+ * vocabulary no matter how they got to an item. The photo is the primary
+ * identifier (large, square, edge-to-edge) with name/price as a caption,
+ * not the other way around: staff should recognize the product by its
+ * picture before reading its name.
+ */
+function ProductCard({
   item,
   disabled,
   onPick,
   t,
 }: {
-  item: PosQuickPickItem;
+  item: PosGridItem;
   disabled: boolean;
   onPick: (sku: string) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const isOut = !item.allowBackorder && item.stockQty <= 0;
+  const isOut = !item.allowBackorder && item.stockQty !== null && item.stockQty <= 0;
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={() => onPick(item.sku)}
       className={cn(
-        "flex min-h-24 items-start gap-3 rounded-2xl border border-border p-3.5 text-start transition-colors",
-        "hover:border-gold hover:bg-gold-soft/40 focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30 focus-visible:outline-none",
+        "group flex flex-col overflow-hidden rounded-2xl border border-border text-start transition-colors",
+        "hover:border-gold focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30 focus-visible:outline-none",
         "disabled:pointer-events-none disabled:opacity-50",
       )}
     >
-      <ProductThumb imagePublicId={item.imagePublicId} size={72} />
-      <span className="flex flex-1 flex-col items-start justify-between gap-1">
-        <span className="text-sm font-medium text-ink">{item.name}</span>
+      <span className="relative aspect-square w-full overflow-hidden border-b border-border bg-paper">
+        {item.imagePublicId ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed card transform
+          <img
+            src={buildCloudinaryUrl(item.imagePublicId, "card")}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-contain transition-transform duration-200 ease-out group-hover:scale-105"
+          />
+        ) : (
+          <span className="flex size-full items-center justify-center">
+            <Package className="size-10 text-ink-soft" aria-hidden="true" />
+          </span>
+        )}
+        {isOut ? (
+          <span className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center rounded-full bg-red-bg px-2 py-1 text-xs font-semibold text-red-text">
+            {t("outOfStock")}
+          </span>
+        ) : null}
+      </span>
+      <span className="flex flex-col gap-1 p-3">
+        <span className="line-clamp-2 min-h-10 text-sm font-medium text-ink">{item.name}</span>
         <span className="flex items-center gap-1.5">
           <span className="font-mono text-sm text-ink-soft">{formatMoney(item.unitPrice)}</span>
-          {isOut ? (
-            <span className="inline-flex items-center rounded-full bg-red-bg px-1.5 py-0.5 text-xs font-semibold text-red-text">
-              {t("outOfStock")}
+          {item.promo ? (
+            <span className="inline-flex items-center rounded-full bg-gold-soft px-1.5 py-0.5 text-xs font-semibold text-gold-strong">
+              {t("promoBadge")}
             </span>
           ) : null}
         </span>
       </span>
     </button>
-  );
-}
-
-function CatalogResultRow({
-  item,
-  disabled,
-  onPick,
-}: {
-  item: PosCatalogItem;
-  disabled: boolean;
-  onPick: (sku: string) => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onPick(item.sku)}
-        className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-start text-sm text-ink transition-colors hover:bg-paper disabled:opacity-50"
-      >
-        <ProductThumb imagePublicId={item.imagePublicId} size={48} />
-        <span className="flex-1">{item.name}</span>
-        <span className="font-mono text-xs text-ink-soft">{item.sku}</span>
-      </button>
-    </li>
   );
 }
 
@@ -339,8 +318,8 @@ export function PosScanView({
   catalog,
   categories,
 }: {
-  quickPicks: PosQuickPickItem[];
-  catalog: PosCatalogItem[];
+  quickPicks: PosGridItem[];
+  catalog: PosGridItem[];
   categories: PosCategory[];
 }) {
   const t = useTranslations("admin.pos");
@@ -350,7 +329,6 @@ export function PosScanView({
   const [lines, setLines] = useState<CartLine[]>([]);
   const [removedLines, setRemovedLines] = useState<RemovedLine[]>([]);
   const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
-  const [scanValue, setScanValue] = useState("");
   const [scanning, setScanning] = useState(false);
   const [manualQuery, setManualQuery] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | "all">("all");
@@ -361,32 +339,10 @@ export function PosScanView({
   const [completeError, setCompleteError] = useState<string | null>(null);
   const [saleSuccess, setSaleSuccess] = useState<{ code: string; total: number } | null>(null);
 
-  const scanInputRef = useRef<HTMLInputElement>(null);
   const linesRef = useRef<CartLine[]>(lines);
   useEffect(() => {
     linesRef.current = lines;
   }, [lines]);
-
-  function focusScanInput() {
-    scanInputRef.current?.focus({ preventScroll: true });
-  }
-
-  useEffect(() => {
-    focusScanInput();
-
-    function refocus() {
-      const active = document.activeElement;
-      const isEditable = active instanceof HTMLElement && (active.tagName === "INPUT" || active.tagName === "TEXTAREA") && active !== scanInputRef.current;
-      if (!isEditable) focusScanInput();
-    }
-
-    document.addEventListener("click", refocus);
-    window.addEventListener("focus", refocus);
-    return () => {
-      document.removeEventListener("click", refocus);
-      window.removeEventListener("focus", refocus);
-    };
-  }, []);
 
   useEffect(() => {
     if (!feedback || feedback.type === "stock_warning") return;
@@ -448,7 +404,6 @@ export function PosScanView({
     setScanning(true);
     const result = await resolvePosScanAction(sku);
     setScanning(false);
-    focusScanInput();
 
     if (!result.ok || result.data.status === "not_found") {
       setFeedback({ type: "not_found", sku, id: Date.now() });
@@ -465,14 +420,6 @@ export function PosScanView({
     addOrWarn(result.data.line);
   }
 
-  function onScanKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    const value = scanValue;
-    setScanValue("");
-    void handleScan(value);
-  }
-
   function confirmOverride() {
     if (!feedback || feedback.type !== "stock_warning") return;
     const { pending } = feedback;
@@ -483,12 +430,10 @@ export function PosScanView({
     } else {
       commitAdd(pending, pending.existingKey, true);
     }
-    focusScanInput();
   }
 
   function dismissFeedback() {
     setFeedback(null);
-    focusScanInput();
   }
 
   /** Sets a cart line to an exact quantity (bulk-entry or the +/- steppers), warning past available stock the same way a physical scan does. */
@@ -566,7 +511,6 @@ export function PosScanView({
     setPaymentMethod(null);
     setCompleteError(null);
     setSaleSuccess(null);
-    focusScanInput();
   }
 
   async function handleCompleteSale() {
@@ -599,7 +543,6 @@ export function PosScanView({
     setRemovedLines([]);
     setPaymentMethod(null);
     router.refresh();
-    focusScanInput();
   }
 
   const isBrowsingCatalog = manualQuery.trim().length > 0 || selectedCategoryId !== "all";
@@ -607,40 +550,18 @@ export function PosScanView({
   const filteredCatalog = useMemo(() => {
     const term = manualQuery.trim().toLowerCase();
     const byCategory = selectedCategoryId === "all" ? catalog : catalog.filter((item) => item.categoryId === selectedCategoryId);
-    if (!term) return byCategory.slice(0, 30);
-    return byCategory.filter((item) => item.name.toLowerCase().includes(term) || item.sku.toLowerCase().includes(term)).slice(0, 30);
+    if (!term) return byCategory.slice(0, 60);
+    return byCategory.filter((item) => item.name.toLowerCase().includes(term) || item.sku.toLowerCase().includes(term)).slice(0, 60);
   }, [catalog, manualQuery, selectedCategoryId]);
 
   const total = lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-ink">{t("title")}</h1>
-          <p className="mt-1 text-sm text-ink-soft">{t("subtitle")}</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-ink-soft">
-          <ScanLine className="size-4" aria-hidden="true" />
-          {t("scannerHint")}
-        </div>
+      <div>
+        <h1 className="font-heading text-2xl font-bold text-ink">{t("title")}</h1>
+        <p className="mt-1 text-sm text-ink-soft">{t("subtitle")}</p>
       </div>
-
-      <label className="sr-only" htmlFor="pos-scan-input">
-        {t("scannerLabel")}
-      </label>
-      <input
-        id="pos-scan-input"
-        ref={scanInputRef}
-        type="text"
-        inputMode="text"
-        autoComplete="off"
-        value={scanValue}
-        onChange={(event) => setScanValue(event.target.value)}
-        onKeyDown={onScanKeyDown}
-        placeholder={t("scannerPlaceholder")}
-        className="sr-only"
-      />
 
       {feedback ? (
         <div
@@ -704,11 +625,11 @@ export function PosScanView({
             filteredCatalog.length === 0 ? (
               <p className="text-sm text-ink-soft">{t("manualSearchEmpty")}</p>
             ) : (
-              <ul className="flex flex-col gap-1">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                 {filteredCatalog.map((item) => (
-                  <CatalogResultRow key={item.sku} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} />
+                  <ProductCard key={item.sku} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} t={t} />
                 ))}
-              </ul>
+              </div>
             )
           ) : (
             <>
@@ -716,9 +637,9 @@ export function PosScanView({
               {quickPicks.length === 0 ? (
                 <p className="text-sm text-ink-soft">{t("quickPicksEmpty")}</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   {quickPicks.map((item) => (
-                    <QuickPickTile key={item.id} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} t={t} />
+                    <ProductCard key={item.id} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} t={t} />
                   ))}
                 </div>
               )}

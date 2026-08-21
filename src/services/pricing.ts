@@ -85,3 +85,70 @@ export async function getEffectivePrice(
 
   return { price: base, base };
 }
+
+/**
+ * Batched sibling of `getEffectivePrice`, keyed by item id, for surfaces
+ * pricing many items at once (the POS catalog grid). One query for every
+ * currently-active promotion of this channel, not one per item — active
+ * promotions are few regardless of catalog size, so this stays a single
+ * round trip whether the catalog has 20 products or 500.
+ */
+export async function getEffectivePrices(
+  items: PricingItem[],
+  channel: PricingChannel,
+  now: Date,
+): Promise<Map<string, EffectivePrice>> {
+  const promoRows = await db
+    .select({
+      productId: promotionItems.productId,
+      bundleId: promotionItems.bundleId,
+      nameAr: promotions.nameAr,
+      nameFr: promotions.nameFr,
+      kind: promotions.kind,
+      value: promotions.value,
+      endsAt: promotions.endsAt,
+    })
+    .from(promotionItems)
+    .innerJoin(promotions, eq(promotionItems.promotionId, promotions.id))
+    .where(
+      and(
+        eq(promotions.isActive, true),
+        lte(promotions.startsAt, now),
+        gt(promotions.endsAt, now),
+        or(eq(promotions.channel, channel), eq(promotions.channel, "both")),
+      ),
+    );
+
+  const promosByItemId = new Map<string, (typeof promoRows)[number][]>();
+  for (const row of promoRows) {
+    const key = row.productId ?? row.bundleId;
+    if (!key) continue;
+    const list = promosByItemId.get(key) ?? [];
+    list.push(row);
+    promosByItemId.set(key, list);
+  }
+
+  const result = new Map<string, EffectivePrice>();
+  for (const item of items) {
+    const base = item.price;
+    const promos = promosByItemId.get(item.id) ?? [];
+    const cheapest = promos.reduce<{ promo: (typeof promos)[number]; price: number } | null>((best, promo) => {
+      const price = computePromoPrice(promo.kind, promo.value, base);
+      return !best || price < best.price ? { promo, price } : best;
+    }, null);
+
+    if (cheapest) {
+      result.set(item.id, {
+        price: cheapest.price,
+        base,
+        promo: { nameAr: cheapest.promo.nameAr, nameFr: cheapest.promo.nameFr, endsAt: cheapest.promo.endsAt },
+      });
+      continue;
+    }
+
+    const discountPrice = item.kind === "product" ? item.discountPrice : null;
+    result.set(item.id, discountPrice != null ? { price: discountPrice, base } : { price: base, base });
+  }
+
+  return result;
+}

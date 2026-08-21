@@ -18,7 +18,7 @@ import type { ServiceResult } from "@/src/lib/errors";
 import { localized } from "@/src/lib/locale-text";
 import { insertWithUniqueOrderCode } from "@/src/lib/order-code";
 import { track } from "@/src/lib/analytics";
-import { getEffectivePrice } from "@/src/services/pricing";
+import { getEffectivePrice, getEffectivePrices, type PricingItem } from "@/src/services/pricing";
 import { requirePermission } from "@/src/services/authz";
 import {
   decrementStockLine,
@@ -47,17 +47,25 @@ async function getPosMessages(): Promise<PosMessages> {
   };
 }
 
-// --- Quick-pick grid ---------------------------------------------------
+// --- Product/bundle grid --------------------------------------------------
 
-export type PosQuickPickItem = {
+/**
+ * One shared shape for every tile the POS browsing grid renders — the
+ * curated quick-pick set and the full searchable catalog alike carry price,
+ * stock, and image, so the UI has exactly one big-image card component
+ * instead of a curated-tile/plain-row split.
+ */
+export type PosGridItem = {
+  kind: "product" | "bundle";
   id: string;
   sku: string;
   name: string;
   unitPrice: number;
   promo: boolean;
-  stockQty: number;
+  /** `null` = not tracked at this granularity (a bundle); never shown as "out of stock". */
+  stockQty: number | null;
   allowBackorder: boolean;
-  categoryId: string;
+  categoryId: string | null;
   imagePublicId: string | null;
 };
 
@@ -79,7 +87,7 @@ async function firstImageByProduct(productIds: string[]): Promise<Map<string, st
 }
 
 /** Active, pinned products only, in the admin-managed order — task 14: "products flagged `is_quick_pick`, ordered by `quick_pick_sort`." Both roles read this; only `products.ts`'s `toggleQuickPick`/`reorderQuickPicks` (admin-only) can change it. */
-export async function listPosQuickPicks(locale: string): Promise<ServiceResult<PosQuickPickItem[]>> {
+export async function listPosQuickPicks(locale: string): Promise<ServiceResult<PosGridItem[]>> {
   const auth = await requirePermission("pos.use");
   if (!auth.ok) return auth;
 
@@ -89,29 +97,30 @@ export async function listPosQuickPicks(locale: string): Promise<ServiceResult<P
     .where(and(eq(products.isQuickPick, true), eq(products.isActive, true)))
     .orderBy(asc(products.quickPickSort), asc(products.createdAt));
 
-  const imageByProduct = await firstImageByProduct(rows.map((r) => r.id));
+  const [imageByProduct, priceByProduct] = await Promise.all([
+    firstImageByProduct(rows.map((r) => r.id)),
+    getEffectivePrices(
+      rows.map((p) => ({ kind: "product" as const, id: p.id, price: p.price, discountPrice: p.discountPrice })),
+      "pos",
+      new Date(),
+    ),
+  ]);
 
-  const now = new Date();
-  const items = await Promise.all(
-    rows.map(async (product): Promise<PosQuickPickItem> => {
-      const effective = await getEffectivePrice(
-        { kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice },
-        "pos",
-        now,
-      );
-      return {
-        id: product.id,
-        sku: product.sku,
-        name: localized(locale, product.nameAr, product.nameFr),
-        unitPrice: effective.price,
-        promo: !!effective.promo,
-        stockQty: product.stockQty,
-        allowBackorder: product.allowBackorder,
-        categoryId: product.categoryId,
-        imagePublicId: imageByProduct.get(product.id) ?? null,
-      };
-    }),
-  );
+  const items = rows.map((product): PosGridItem => {
+    const effective = priceByProduct.get(product.id)!;
+    return {
+      kind: "product",
+      id: product.id,
+      sku: product.sku,
+      name: localized(locale, product.nameAr, product.nameFr),
+      unitPrice: effective.price,
+      promo: !!effective.promo,
+      stockQty: product.stockQty,
+      allowBackorder: product.allowBackorder,
+      categoryId: product.categoryId,
+      imagePublicId: imageByProduct.get(product.id) ?? null,
+    };
+  });
 
   return { ok: true, data: items };
 }
@@ -133,69 +142,99 @@ export async function listPosCategories(locale: string): Promise<ServiceResult<P
   };
 }
 
-// --- Manual fallback: search-by-name over the whole active catalog ------
+// --- Full catalog: the primary browsing/search surface --------------------
 
-export type PosCatalogItem = {
-  kind: "product" | "bundle";
-  sku: string;
-  name: string;
-  categoryId: string | null;
-  imagePublicId: string | null;
-};
-
-/** Lightweight name+SKU index for the manual picker (damaged/missing labels) — client-filters this list, same "shop-scale catalog, filter client-side" convention as the counter-sheet (task 06) and order item picker (task 13). Selecting a result re-scans by its SKU, so it's the identical code path as a physical scan. */
-export async function listPosCatalog(locale: string): Promise<ServiceResult<PosCatalogItem[]>> {
+/** The whole active catalog (products, variants, bundles), same shape as the quick-pick grid — client-filters this list, same "shop-scale catalog, filter client-side" convention as the counter-sheet (task 06) and order item picker (task 13). Selecting a result re-scans by its SKU, so it's the identical code path as a physical scan. */
+export async function listPosCatalog(locale: string): Promise<ServiceResult<PosGridItem[]>> {
   const auth = await requirePermission("pos.use");
   if (!auth.ok) return auth;
 
   const [productRows, variantRows, bundleRows] = await Promise.all([
-    db
-      .select({ id: products.id, sku: products.sku, nameAr: products.nameAr, nameFr: products.nameFr, categoryId: products.categoryId })
-      .from(products)
-      .where(eq(products.isActive, true)),
+    db.select().from(products).where(eq(products.isActive, true)),
     db
       .select({
+        id: productVariants.id,
         sku: productVariants.sku,
         variantNameAr: productVariants.nameAr,
         variantNameFr: productVariants.nameFr,
+        stockQty: productVariants.stockQty,
         productId: products.id,
         productNameAr: products.nameAr,
         productNameFr: products.nameFr,
+        productPrice: products.price,
+        productDiscountPrice: products.discountPrice,
+        productStockQty: products.stockQty,
+        productAllowBackorder: products.allowBackorder,
         categoryId: products.categoryId,
       })
       .from(productVariants)
       .innerJoin(products, eq(productVariants.productId, products.id))
       .where(and(eq(productVariants.isActive, true), eq(products.isActive, true))),
-    db
-      .select({ sku: bundles.sku, nameAr: bundles.nameAr, nameFr: bundles.nameFr })
-      .from(bundles)
-      .where(eq(bundles.isActive, true)),
+    db.select().from(bundles).where(eq(bundles.isActive, true)),
   ]);
 
-  const imageByProduct = await firstImageByProduct([...productRows.map((r) => r.id), ...variantRows.map((r) => r.productId)]);
+  const [imageByProduct, priceByItem] = await Promise.all([
+    firstImageByProduct([...productRows.map((r) => r.id), ...variantRows.map((r) => r.productId)]),
+    getEffectivePrices(
+      [
+        ...productRows.map((p): PricingItem => ({ kind: "product", id: p.id, price: p.price, discountPrice: p.discountPrice })),
+        // A variant carries no price of its own — priced via its parent product, same convention `resolvePosScanCore` uses.
+        ...variantRows.map(
+          (v): PricingItem => ({ kind: "product", id: v.productId, price: v.productPrice, discountPrice: v.productDiscountPrice }),
+        ),
+        ...bundleRows.map((b): PricingItem => ({ kind: "bundle", id: b.id, price: b.price })),
+      ],
+      "pos",
+      new Date(),
+    ),
+  ]);
 
-  const items: PosCatalogItem[] = [
-    ...productRows.map((row) => ({
-      kind: "product" as const,
-      sku: row.sku,
-      name: localized(locale, row.nameAr, row.nameFr),
-      categoryId: row.categoryId,
-      imagePublicId: imageByProduct.get(row.id) ?? null,
-    })),
-    ...variantRows.map((row) => ({
-      kind: "product" as const,
-      sku: row.sku,
-      name: `${localized(locale, row.productNameAr, row.productNameFr)} — ${localized(locale, row.variantNameAr, row.variantNameFr)}`,
-      categoryId: row.categoryId,
-      imagePublicId: imageByProduct.get(row.productId) ?? null,
-    })),
-    ...bundleRows.map((row) => ({
-      kind: "bundle" as const,
-      sku: row.sku,
-      name: localized(locale, row.nameAr, row.nameFr),
-      categoryId: null,
-      imagePublicId: null,
-    })),
+  const items: PosGridItem[] = [
+    ...productRows.map((row): PosGridItem => {
+      const effective = priceByItem.get(row.id)!;
+      return {
+        kind: "product",
+        id: row.id,
+        sku: row.sku,
+        name: localized(locale, row.nameAr, row.nameFr),
+        unitPrice: effective.price,
+        promo: !!effective.promo,
+        stockQty: row.stockQty,
+        allowBackorder: row.allowBackorder,
+        categoryId: row.categoryId,
+        imagePublicId: imageByProduct.get(row.id) ?? null,
+      };
+    }),
+    ...variantRows.map((row): PosGridItem => {
+      const effective = priceByItem.get(row.productId)!;
+      return {
+        kind: "product",
+        id: row.id,
+        sku: row.sku,
+        name: `${localized(locale, row.productNameAr, row.productNameFr)} — ${localized(locale, row.variantNameAr, row.variantNameFr)}`,
+        unitPrice: effective.price,
+        promo: !!effective.promo,
+        stockQty: row.stockQty ?? row.productStockQty,
+        allowBackorder: row.productAllowBackorder,
+        categoryId: row.categoryId,
+        imagePublicId: imageByProduct.get(row.productId) ?? null,
+      };
+    }),
+    ...bundleRows.map((row): PosGridItem => {
+      const effective = priceByItem.get(row.id)!;
+      return {
+        kind: "bundle",
+        id: row.id,
+        sku: row.sku,
+        name: localized(locale, row.nameAr, row.nameFr),
+        unitPrice: effective.price,
+        promo: !!effective.promo,
+        stockQty: null,
+        allowBackorder: true,
+        categoryId: null,
+        imagePublicId: null,
+      };
+    }),
   ];
 
   items.sort((a, b) => a.name.localeCompare(b.name, locale === "ar" ? "ar" : "fr"));
