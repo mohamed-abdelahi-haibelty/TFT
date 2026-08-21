@@ -59,9 +59,9 @@ function ProductThumb({ imagePublicId, size }: { imagePublicId: string | null; s
       style={{ width: size, height: size }}
     >
       {imagePublicId ? (
-        // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed thumbnail transform
+        // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed card transform (stays crisp at this display size)
         <img
-          src={buildCloudinaryUrl(imagePublicId, "thumbnail")}
+          src={buildCloudinaryUrl(imagePublicId, "card")}
           alt=""
           width={size}
           height={size}
@@ -99,7 +99,7 @@ function QuickPickTile({
         "disabled:pointer-events-none disabled:opacity-50",
       )}
     >
-      <ProductThumb imagePublicId={item.imagePublicId} size={40} />
+      <ProductThumb imagePublicId={item.imagePublicId} size={72} />
       <span className="flex flex-1 flex-col items-start justify-between gap-1">
         <span className="text-sm font-medium text-ink">{item.name}</span>
         <span className="flex items-center gap-1.5">
@@ -132,7 +132,7 @@ function CatalogResultRow({
         onClick={() => onPick(item.sku)}
         className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-start text-sm text-ink transition-colors hover:bg-paper disabled:opacity-50"
       >
-        <ProductThumb imagePublicId={item.imagePublicId} size={32} />
+        <ProductThumb imagePublicId={item.imagePublicId} size={48} />
         <span className="flex-1">{item.name}</span>
         <span className="font-mono text-xs text-ink-soft">{item.sku}</span>
       </button>
