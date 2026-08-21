@@ -686,7 +686,7 @@ export function PosScanView({
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <div className="relative">
             <Search className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-soft" aria-hidden="true" />
             <input
