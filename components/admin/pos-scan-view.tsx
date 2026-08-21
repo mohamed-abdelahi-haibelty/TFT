@@ -602,12 +602,7 @@ export function PosScanView({
     focusScanInput();
   }
 
-  const categoryFilteredQuickPicks = useMemo(
-    () => (selectedCategoryId === "all" ? quickPicks : quickPicks.filter((item) => item.categoryId === selectedCategoryId)),
-    [quickPicks, selectedCategoryId],
-  );
-
-  const isSearching = manualQuery.trim().length > 0;
+  const isBrowsingCatalog = manualQuery.trim().length > 0 || selectedCategoryId !== "all";
 
   const filteredCatalog = useMemo(() => {
     const term = manualQuery.trim().toLowerCase();
@@ -705,7 +700,7 @@ export function PosScanView({
 
           <CategoryTabs categories={categories} selectedId={selectedCategoryId} onSelect={setSelectedCategoryId} t={t} />
 
-          {isSearching ? (
+          {isBrowsingCatalog ? (
             filteredCatalog.length === 0 ? (
               <p className="text-sm text-ink-soft">{t("manualSearchEmpty")}</p>
             ) : (
@@ -718,11 +713,11 @@ export function PosScanView({
           ) : (
             <>
               <h2 className="font-heading text-lg font-semibold text-ink">{t("quickPicksTitle")}</h2>
-              {categoryFilteredQuickPicks.length === 0 ? (
+              {quickPicks.length === 0 ? (
                 <p className="text-sm text-ink-soft">{t("quickPicksEmpty")}</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {categoryFilteredQuickPicks.map((item) => (
+                  {quickPicks.map((item) => (
                     <QuickPickTile key={item.id} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} t={t} />
                   ))}
                 </div>
