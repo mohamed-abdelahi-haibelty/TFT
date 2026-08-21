@@ -21,7 +21,7 @@ export async function AdminForbidden({
 
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
-      <span className="mb-1 flex size-12 items-center justify-center rounded-full bg-red-bg text-red-text">
+      <span className="mb-1 flex size-12 items-center justify-center rounded-full border border-plum text-plum">
         <ShieldAlert className="size-5" aria-hidden="true" />
       </span>
       <h1 className="font-heading text-xl font-bold text-ink">{t("title")}</h1>
@@ -29,7 +29,7 @@ export async function AdminForbidden({
       {backHref ? (
         <Link
           href={backHref}
-          className="mt-3 inline-flex h-10 items-center rounded-full border border-border px-5 text-sm font-medium text-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-muted active:translate-y-0"
+          className="mt-3 inline-flex h-10 items-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-muted"
         >
           {t("back")}
         </Link>

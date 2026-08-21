@@ -31,7 +31,7 @@ export function UserRowActions({
           <Button
             type="submit"
             variant={isActive ? "destructive" : "secondary"}
-            className="h-8 rounded-full px-3.5 text-xs"
+            className="h-8 rounded-xs px-3.5 text-xs"
           >
             {isActive ? t("deactivate") : t("reactivate")}
           </Button>
@@ -40,7 +40,7 @@ export function UserRowActions({
         <Button
           type="button"
           variant="ghost"
-          className="h-8 rounded-full px-3.5 text-xs"
+          className="h-8 rounded-xs px-3.5 text-xs"
           onClick={() => setShowReset((v) => !v)}
         >
           {t("resetPasswordToggle")}
@@ -55,12 +55,12 @@ export function UserRowActions({
             required
             minLength={8}
             placeholder={t("resetPasswordLabel")}
-            className="h-9 w-44 rounded-md border-border px-3 text-sm focus-visible:border-gold focus-visible:ring-gold/30"
+            className="h-9 w-44 rounded-md border-border px-3 text-sm focus-visible:border-ink focus-visible:ring-0"
           />
           <Button
             type="submit"
             disabled={isResetPending}
-            className="h-9 rounded-full bg-ink px-3.5 text-xs text-paper hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
+            className="h-9 rounded-xs bg-ink px-3.5 text-xs text-paper hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
           >
             {t("resetPasswordSubmit")}
           </Button>
@@ -69,7 +69,7 @@ export function UserRowActions({
 
       {resetState ? (
         <p
-          className={`text-xs ${resetState.ok ? "text-green-text" : "text-red-text"}`}
+          className={`text-xs font-semibold ${resetState.ok ? "text-ink" : "text-plum"}`}
           aria-live="polite"
         >
           {resetState.ok ? t("resetPasswordSuccess") : resetState.error.message}

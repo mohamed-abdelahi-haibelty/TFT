@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Lock, Plus } from "lucide-react";
+import { CircleAlert, Lock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,10 +14,9 @@ import { slugify } from "@/src/lib/slug";
 import { createProductAction, deleteProductAction, updateProductAction } from "@/src/services/product-actions";
 import type { ProductDetail } from "@/src/services/products";
 
-const inputClass =
-  "h-11 rounded-md border-border px-3.5 focus-visible:border-gold focus-visible:ring-gold/30";
+const inputClass = "h-11 rounded-xs border-border px-3.5 focus-visible:border-ink focus-visible:ring-0";
 const textareaClass =
-  "rounded-md border border-border px-3.5 py-2.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30";
+  "rounded-xs border border-border px-3.5 py-2.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-0";
 
 type FormValues = {
   nameAr: string;
@@ -240,7 +239,7 @@ export function ProductForm({
           {isEditMode ? (
             <div className="flex flex-col gap-1.5">
               <Label>{t("skuLabel")}</Label>
-              <p className="flex h-11 items-center rounded-md border border-border bg-paper px-3.5 font-mono text-sm text-ink-soft">
+              <p className="flex h-11 items-center rounded-xs border border-border bg-paper px-3.5 font-mono text-sm text-ink-soft">
                 {product.sku}
               </p>
             </div>
@@ -312,7 +311,7 @@ export function ProductForm({
           ) : (
             <div className="flex flex-col gap-1.5">
               <Label>{t("stockQtyLabel")}</Label>
-              <p className="flex h-11 items-center rounded-md border border-border bg-paper px-3.5 font-mono text-sm text-ink-soft">
+              <p className="flex h-11 items-center rounded-xs border border-border bg-paper px-3.5 font-mono text-sm text-ink-soft">
                 {product.stockQty}
               </p>
               <p className="text-xs text-ink-soft">{t("stockQtyHint")}</p>
@@ -343,7 +342,7 @@ export function ProductForm({
               name="allowBackorder"
               checked={values.allowBackorder}
               onChange={(event) => set("allowBackorder", event.target.checked)}
-              className="size-5 rounded border-border accent-gold"
+              className="size-5 rounded-xs border-border accent-ink"
             />
             {t("allowBackorderLabel")}
           </label>
@@ -353,7 +352,7 @@ export function ProductForm({
               name="isActive"
               checked={values.isActive}
               onChange={(event) => set("isActive", event.target.checked)}
-              className="size-5 rounded border-border accent-gold"
+              className="size-5 rounded-xs border-border accent-ink"
             />
             {t("activeLabel")}
           </label>
@@ -389,7 +388,7 @@ export function ProductForm({
           type="button"
           variant="outline"
           onClick={addVariant}
-          className="h-10 w-fit gap-1.5 rounded-full border-border px-4 text-sm"
+          className="h-10 w-fit gap-1.5 rounded-xs border-border px-4 text-sm"
         >
           <Plus className="size-4" aria-hidden="true" />
           {t("addVariant")}
@@ -398,7 +397,8 @@ export function ProductForm({
 
       <div className="flex flex-col gap-5 border-t border-border pt-8" aria-live="polite">
         {state && !state.ok ? (
-          <p className="mb-4 rounded-md bg-red-bg px-3.5 py-2.5 text-sm text-red-text">
+          <p role="alert" className="mb-4 flex items-start gap-2 rounded-xs border border-plum px-3.5 py-2.5 text-sm font-medium text-plum">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             {state.error.message}
           </p>
         ) : null}
@@ -409,24 +409,26 @@ export function ProductForm({
             <div className="flex items-center gap-2">
               <Button
                 type="button"
+                variant="outline"
                 ref={confirmDeleteRef}
                 disabled={isDeletePending}
                 onClick={handleDelete}
-                className="h-9 rounded-full bg-destructive px-4 text-xs text-paper hover:bg-[color-mix(in_oklch,var(--red-strong),black_10%)]"
+                className="h-9 rounded-xs border-plum px-4 text-xs text-plum transition-colors hover:bg-plum hover:text-paper"
               >
                 {isDeletePending ? t("deleteSubmitting") : t("delete")}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                className="h-9 rounded-full px-4 text-xs"
+                className="h-9 rounded-xs px-4 text-xs"
                 onClick={() => setConfirmingDelete(false)}
               >
                 {t("cancel")}
               </Button>
             </div>
             {deleteError ? (
-              <p className="text-xs text-red-text" aria-live="polite">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-plum" aria-live="polite">
+                <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
                 {deleteError}
               </p>
             ) : null}
@@ -436,7 +438,7 @@ export function ProductForm({
         <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/admin/products"
-            className="inline-flex h-11 items-center justify-center rounded-full border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
+            className="inline-flex h-11 items-center justify-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
           >
             {t("back")}
           </Link>
@@ -445,7 +447,7 @@ export function ProductForm({
             <Button
               type="button"
               variant="outline"
-              className="h-11 rounded-full border-red-strong/60 px-5 text-sm text-red-strong hover:bg-red-bg"
+              className="h-11 rounded-xs border-plum px-5 text-sm text-plum transition-colors hover:bg-plum hover:text-paper"
               onClick={() => setConfirmingDelete(true)}
             >
               {t("delete")}
@@ -455,7 +457,7 @@ export function ProductForm({
           <Button
             type="submit"
             disabled={isPending}
-            className="h-11 rounded-full bg-ink px-6 text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0"
+            className="h-11 rounded-xs bg-ink px-6 text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] disabled:opacity-70"
           >
             {isEditMode
               ? isPending

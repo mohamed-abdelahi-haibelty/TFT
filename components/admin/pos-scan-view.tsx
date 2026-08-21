@@ -79,7 +79,7 @@ function ProductCard({
       onClick={() => onPick(item.sku)}
       className={cn(
         "group flex flex-col overflow-hidden rounded-2xl border border-border text-start transition-colors",
-        "hover:border-gold focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30 focus-visible:outline-none",
+        "hover:border-ink focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30 focus-visible:outline-none",
         "disabled:pointer-events-none disabled:opacity-50",
       )}
     >
@@ -99,7 +99,7 @@ function ProductCard({
           </span>
         )}
         {isOut ? (
-          <span className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center rounded-full bg-red-bg px-2 py-1 text-xs font-semibold text-red-text">
+          <span className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center rounded-xs bg-ink px-2 py-1 text-xs font-semibold text-paper">
             {t("outOfStock")}
           </span>
         ) : null}
@@ -109,7 +109,7 @@ function ProductCard({
         <span className="flex items-center gap-1.5">
           <span className="font-mono text-sm text-ink-soft">{formatMoney(item.unitPrice)}</span>
           {item.promo ? (
-            <span className="inline-flex items-center rounded-full bg-gold-soft px-1.5 py-0.5 text-xs font-semibold text-gold-strong">
+            <span className="inline-flex items-center rounded-xs bg-ink px-1.5 py-0.5 text-xs font-semibold text-paper">
               {t("promoBadge")}
             </span>
           ) : null}
@@ -137,8 +137,8 @@ function CategoryTabs({
         type="button"
         onClick={() => onSelect("all")}
         className={cn(
-          "shrink-0 snap-start border-b-2 pb-1.5 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-gold hover:text-ink",
-          selectedId === "all" ? "border-gold text-ink" : "border-transparent text-ink-soft",
+          "shrink-0 snap-start border-b-2 pb-1.5 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-ink hover:text-ink",
+          selectedId === "all" ? "border-ink text-ink" : "border-transparent text-ink-soft",
         )}
       >
         {t("categoryAllLabel")}
@@ -149,8 +149,8 @@ function CategoryTabs({
           type="button"
           onClick={() => onSelect(category.id)}
           className={cn(
-            "shrink-0 snap-start border-b-2 pb-1.5 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-gold hover:text-ink",
-            selectedId === category.id ? "border-gold text-ink" : "border-transparent text-ink-soft",
+            "shrink-0 snap-start border-b-2 pb-1.5 text-xs font-semibold tracking-[0.04em] uppercase transition-colors hover:border-ink hover:text-ink",
+            selectedId === category.id ? "border-ink text-ink" : "border-transparent text-ink-soft",
           )}
         >
           {category.name}
@@ -186,7 +186,7 @@ function QtyEditorInput({ qty, onCommit, onCancel }: { qty: number; onCommit: (q
           onCancel();
         }
       }}
-      className="h-7 w-12 rounded-md border border-border text-center font-mono text-sm text-ink outline-none focus-visible:border-gold"
+      className="h-7 w-12 rounded-md border border-border text-center font-mono text-sm text-ink outline-none focus-visible:border-ink"
     />
   );
 }
@@ -224,7 +224,7 @@ function SaleLineRow({
           <span className="flex items-center gap-1.5 font-mono text-xs text-ink-soft">
             {formatMoney(line.unitPrice)}
             {line.promo ? (
-              <span className="inline-flex items-center rounded-full bg-gold-soft px-1.5 py-0.5 text-xs font-semibold text-gold-strong">
+              <span className="inline-flex items-center rounded-xs bg-ink px-1.5 py-0.5 text-xs font-semibold text-paper">
                 {t("promoBadge")}
               </span>
             ) : null}
@@ -234,7 +234,7 @@ function SaleLineRow({
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1 rounded-full border border-border">
+        <div className="flex items-center gap-1 rounded-xs border border-border">
           <button
             type="button"
             aria-label={t("qtyDecrease")}
@@ -255,7 +255,7 @@ function SaleLineRow({
               type="button"
               aria-label={t("qtyEditLabel")}
               onClick={() => onStartEditQty(line.key)}
-              className="min-w-6 px-1 text-center font-mono text-sm text-ink hover:text-gold-strong"
+              className="min-w-6 px-1 text-center font-mono text-sm text-ink underline-offset-2 hover:underline"
             >
               {line.qty}
             </button>
@@ -274,7 +274,7 @@ function SaleLineRow({
           <button
             type="button"
             onClick={() => onRequestRemove(line.key)}
-            className="text-xs font-medium text-red-text hover:underline"
+            className="text-xs font-medium text-plum hover:underline"
           >
             {t("removeItem")}
           </button>
@@ -289,7 +289,7 @@ function SaleLineRow({
               type="button"
               variant="destructive"
               size="sm"
-              className="rounded-full"
+              className="rounded-xs"
               onClick={() => onConfirmRemove(line.key, "wrong_scan")}
             >
               {t("removeReasonWrongScan")}
@@ -298,12 +298,12 @@ function SaleLineRow({
               type="button"
               variant="destructive"
               size="sm"
-              className="rounded-full"
+              className="rounded-xs"
               onClick={() => onConfirmRemove(line.key, "changed_mind")}
             >
               {t("removeReasonChangedMind")}
             </Button>
-            <Button type="button" variant="secondary" size="sm" className="rounded-full" onClick={onCancelRemove}>
+            <Button type="button" variant="secondary" size="sm" className="rounded-xs" onClick={onCancelRemove}>
               {t("removeCancel")}
             </Button>
           </div>
@@ -569,9 +569,9 @@ export function PosScanView({
           aria-live="polite"
           className={cn(
             "flex flex-wrap items-center gap-3 rounded-lg border p-3.5",
-            feedback.type === "success" && "border-green-bg bg-green-bg text-green-text",
-            (feedback.type === "not_found" || feedback.type === "inactive") && "border-red-bg bg-red-bg text-red-text",
-            feedback.type === "stock_warning" && "border-gold-soft bg-gold-soft text-gold-strong",
+            feedback.type === "success" && "border-ink text-ink",
+            (feedback.type === "not_found" || feedback.type === "inactive") && "border-plum text-plum",
+            feedback.type === "stock_warning" && "border-ink text-ink",
           )}
         >
           {feedback.type === "success" ? <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" /> : null}
@@ -591,10 +591,10 @@ export function PosScanView({
 
           {feedback.type === "stock_warning" ? (
             <div className="flex gap-2">
-              <Button type="button" size="sm" className="rounded-full" onClick={confirmOverride}>
+              <Button type="button" size="sm" className="rounded-xs" onClick={confirmOverride}>
                 {t("stockWarningOverride")}
               </Button>
-              <Button type="button" size="sm" variant="secondary" className="rounded-full" onClick={dismissFeedback}>
+              <Button type="button" size="sm" variant="secondary" className="rounded-xs" onClick={dismissFeedback}>
                 {t("stockWarningCancel")}
               </Button>
             </div>
@@ -615,7 +615,7 @@ export function PosScanView({
               value={manualQuery}
               onChange={(event) => setManualQuery(event.target.value)}
               placeholder={t("manualSearchPlaceholder")}
-              className="h-11 w-full rounded-full border border-border ps-10 pe-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+              className="h-11 w-full rounded-xs border border-border ps-10 pe-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
             />
           </div>
 
@@ -663,7 +663,7 @@ export function PosScanView({
           </div>
 
           {saleSuccess ? (
-            <div className="flex items-center gap-2 rounded-md bg-green-bg p-3 text-sm text-green-text">
+            <div className="flex items-center gap-2 rounded-md border border-ink p-3 text-sm text-ink">
               <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" />
               <div className="flex-1">
                 <p className="font-semibold">{t("saleSuccessTitle")}</p>
@@ -713,7 +713,7 @@ export function PosScanView({
                   aria-pressed={paymentMethod === method}
                   onClick={() => setPaymentMethod(method)}
                   className={cn(
-                    "h-9 rounded-full border px-3.5 text-sm font-medium transition-colors",
+                    "h-9 rounded-xs border px-3.5 text-sm font-medium transition-colors",
                     paymentMethod === method ? "border-ink bg-ink text-paper" : "border-border text-ink hover:bg-paper",
                   )}
                 >
@@ -723,14 +723,14 @@ export function PosScanView({
             </div>
           </div>
 
-          {completeError ? <p className="text-sm text-red-text">{completeError}</p> : null}
+          {completeError ? <p className="text-sm font-medium text-plum">{completeError}</p> : null}
           {!paymentMethod && lines.length > 0 ? <p className="text-xs text-ink-soft">{t("completeSaleSelectPayment")}</p> : null}
 
           <Button
             type="button"
             disabled={!paymentMethod || lines.length === 0 || completing}
             onClick={() => void handleCompleteSale()}
-            className="h-12 rounded-full text-base"
+            className="h-12 rounded-xs text-base"
           >
             {completing ? t("completeSaleSubmitting") : t("completeSale")}
           </Button>

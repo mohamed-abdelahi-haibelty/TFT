@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, X } from "lucide-react";
+import { CircleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import type {
   PromotionPickerProduct,
 } from "@/src/services/promotions";
 
-const inputClass = "h-11 rounded-md border-border px-3.5 focus-visible:border-gold focus-visible:ring-gold/30";
+const inputClass = "h-11 rounded-xs border-border px-3.5 focus-visible:border-ink focus-visible:ring-0";
 
 type PromotionKind = "percent" | "fixed";
 type PromotionChannel = "web" | "pos" | "both";
@@ -162,7 +162,7 @@ export function PromotionForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="promotion-name-ar">
-              {t("nameArLabel")} <span className="text-red-text" aria-hidden="true">*</span>
+              {t("nameArLabel")} <span className="text-plum" aria-hidden="true">*</span>
             </Label>
             <Input
               id="promotion-name-ar"
@@ -177,7 +177,7 @@ export function PromotionForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="promotion-name-fr">
-              {t("nameFrLabel")} <span className="text-red-text" aria-hidden="true">*</span>
+              {t("nameFrLabel")} <span className="text-plum" aria-hidden="true">*</span>
             </Label>
             <Input
               id="promotion-name-fr"
@@ -215,7 +215,7 @@ export function PromotionForm({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="promotion-value">
               {values.kind === "percent" ? t("valuePercentLabel") : t("valueFixedLabel")}{" "}
-              <span className="text-red-text" aria-hidden="true">*</span>
+              <span className="text-plum" aria-hidden="true">*</span>
             </Label>
             <Input
               id="promotion-value"
@@ -318,7 +318,7 @@ export function PromotionForm({
             name="isActive"
             checked={values.isActive}
             onChange={(event) => set("isActive", event.target.checked)}
-            className="size-5 rounded border-border accent-gold"
+            className="size-5 rounded-xs border-border accent-ink"
           />
           {t("activeLabel")}
         </label>
@@ -352,15 +352,15 @@ export function PromotionForm({
               const isViolator = values.kind === "fixed" && kindValue >= item.price;
               return (
                 <div key={item.key} className="flex flex-wrap items-center gap-3 p-4">
-                  <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium text-ink">
+                  <span className="rounded-xs border border-border px-2.5 py-1 text-xs font-medium text-ink">
                     {item.kind === "product" ? t("itemTypeProduct") : t("itemTypeBundle")}
                   </span>
                   <div className="min-w-40 flex-1">
                     <p className="text-sm font-medium text-ink">{item.nameFr}</p>
                     <p className="font-mono text-xs text-ink-soft">{item.sku}</p>
                     {isViolator ? (
-                      <p className="mt-1 flex items-center gap-1 text-xs text-red-text">
-                        <AlertTriangle className="size-3" aria-hidden="true" />
+                      <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-plum">
+                        <CircleAlert className="size-3" aria-hidden="true" />
                         {t("itemViolation", { value: formatMoney(kindValue), price: formatMoney(item.price) })}
                       </p>
                     ) : null}
@@ -375,7 +375,7 @@ export function PromotionForm({
                     type="button"
                     aria-label={t("removeItem")}
                     onClick={() => removeItem(item.key)}
-                    className="flex size-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-red-bg hover:text-red-text focus-visible:ring-3 focus-visible:ring-gold/30"
+                    className="flex size-11 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-plum hover:text-paper"
                   >
                     <X className="size-4" aria-hidden="true" />
                   </button>
@@ -388,7 +388,10 @@ export function PromotionForm({
 
       <div className="border-t border-border pt-8" aria-live="polite">
         {state && !state.ok ? (
-          <p className="mb-4 rounded-md bg-red-bg px-3.5 py-2.5 text-sm text-red-text">{state.error.message}</p>
+          <p role="alert" className="mb-4 flex items-start gap-2 rounded-xs border border-plum px-3.5 py-2.5 text-sm font-medium text-plum">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            {state.error.message}
+          </p>
         ) : null}
 
         {items.length === 0 || violatingItems.length > 0 ? (
@@ -400,7 +403,7 @@ export function PromotionForm({
         <Button
           type="submit"
           disabled={isPending || items.length === 0 || violatingItems.length > 0}
-          className="h-11 rounded-full bg-ink px-6 text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0"
+          className="h-11 rounded-xs bg-ink px-6 text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] disabled:opacity-70"
         >
           {isEditMode
             ? isPending

@@ -49,19 +49,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={item.id}
             role="status"
-            className="pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-lg border border-border bg-paper p-3.5 shadow-[0_8px_32px_oklch(0.204_0.009_59.14/0.16)] animate-in slide-in-from-bottom-2 fade-in-0 duration-200 ease-out"
+            className={`pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-lg border bg-paper p-3.5 shadow-[0_8px_32px_oklch(0.204_0.009_59.14/0.16)] animate-in slide-in-from-bottom-2 fade-in-0 duration-200 ease-out ${
+              item.variant === "success" ? "border-border" : "border-plum"
+            }`}
           >
             {item.variant === "success" ? (
-              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-green" aria-hidden="true" />
+              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-ink" aria-hidden="true" />
             ) : (
-              <CircleAlert className="mt-0.5 size-5 shrink-0 text-red" aria-hidden="true" />
+              <CircleAlert className="mt-0.5 size-5 shrink-0 text-plum" aria-hidden="true" />
             )}
-            <p className="flex-1 text-sm leading-5 text-ink">{item.message}</p>
+            <p className={`flex-1 text-sm leading-5 ${item.variant === "success" ? "text-ink" : "text-plum"}`}>
+              {item.message}
+            </p>
             <button
               type="button"
               onClick={() => dismiss(item.id)}
               aria-label={t("close")}
-              className="flex size-6 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-paper hover:text-ink"
+              className="flex size-6 shrink-0 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-paper hover:text-ink"
             >
               <X className="size-3.5" aria-hidden="true" />
             </button>

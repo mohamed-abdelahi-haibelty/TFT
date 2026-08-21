@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { BrandMark } from "@/components/brand-mark";
 import { LoginForm } from "@/components/admin/login-form";
 import { requireUser } from "@/src/services/authz";
 
@@ -34,8 +33,8 @@ export default async function AdminLoginPage({
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <BrandMark className="size-12 text-lg" />
-          <p className="mt-3 font-mono text-xs font-semibold tracking-wide text-ink-soft">
+          <span className="font-display text-3xl font-semibold text-ink">TFT</span>
+          <p className="mt-3 text-xs font-semibold tracking-[0.04em] text-ink-soft uppercase">
             {t("brand")}
           </p>
           <h1 className="mt-3 font-heading text-2xl font-bold text-ink">{t("title")}</h1>

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Link } from "@/src/i18n/navigation";
@@ -51,7 +52,7 @@ export function BundleRowActions({
               type="submit"
               ref={confirmRef}
               disabled={isPending}
-              className="h-11 rounded-full bg-ink px-4 text-sm text-paper hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
+              className="h-11 rounded-xs bg-ink px-4 text-sm text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
             >
               {isPending ? t("deactivateSubmitting") : t("deactivate")}
             </Button>
@@ -59,14 +60,15 @@ export function BundleRowActions({
           <Button
             type="button"
             variant="ghost"
-            className="h-11 rounded-full px-4 text-sm"
+            className="h-11 rounded-xs px-4 text-sm"
             onClick={() => setConfirmingDeactivate(false)}
           >
             {t("cancel")}
           </Button>
         </div>
         {state && !state.ok ? (
-          <p className="text-xs text-red-text" aria-live="polite">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-plum" aria-live="polite">
+            <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
             {state.error.message}
           </p>
         ) : null}
@@ -78,7 +80,7 @@ export function BundleRowActions({
     <div className="flex items-center gap-2">
       <Link
         href={`/admin/bundles/${bundleId}`}
-        className="inline-flex h-11 items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+        className="inline-flex h-11 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
       >
         {t("edit")}
       </Link>
@@ -86,7 +88,7 @@ export function BundleRowActions({
         href={`/admin/bundles/${bundleId}/label`}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex h-11 items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+        className="inline-flex h-11 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
       >
         {t("printLabel")}
       </Link>
@@ -94,20 +96,21 @@ export function BundleRowActions({
         <Button
           type="button"
           variant="secondary"
-          className="h-11 rounded-full px-4 text-sm"
+          className="h-11 rounded-xs px-4 text-sm"
           onClick={() => setConfirmingDeactivate(true)}
         >
           {t("deactivate")}
         </Button>
       ) : (
         <form action={formAction}>
-          <Button type="submit" disabled={isPending} className="h-11 rounded-full px-4 text-sm">
+          <Button type="submit" disabled={isPending} className="h-11 rounded-xs px-4 text-sm">
             {isPending ? t("activateSubmitting") : t("activate")}
           </Button>
         </form>
       )}
       {state && !state.ok ? (
-        <p className="text-xs text-red-text" aria-live="polite">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-plum" aria-live="polite">
+          <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
           {state.error.message}
         </p>
       ) : null}

@@ -55,7 +55,7 @@ export function QuickPickManager({ items }: { items: QuickPickManagerItem[] }) {
                   aria-label={t("quickPickMoveUp")}
                   disabled={!!movingId || index === 0}
                   onClick={() => move(index, -1)}
-                  className="flex size-8 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:opacity-30"
+                  className="flex size-8 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:opacity-30"
                 >
                   <ChevronUp className="size-4" aria-hidden="true" />
                 </button>
@@ -64,7 +64,7 @@ export function QuickPickManager({ items }: { items: QuickPickManagerItem[] }) {
                   aria-label={t("quickPickMoveDown")}
                   disabled={!!movingId || index === items.length - 1}
                   onClick={() => move(index, 1)}
-                  className="flex size-8 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:opacity-30"
+                  className="flex size-8 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:opacity-30"
                 >
                   <ChevronDown className="size-4" aria-hidden="true" />
                 </button>
@@ -76,7 +76,7 @@ export function QuickPickManager({ items }: { items: QuickPickManagerItem[] }) {
       )}
 
       {moveError ? (
-        <p className="text-xs text-red-text" aria-live="polite">
+        <p className="text-xs font-semibold text-plum" aria-live="polite">
           {moveError}
         </p>
       ) : null}

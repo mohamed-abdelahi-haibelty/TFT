@@ -25,7 +25,7 @@ export function ProductRowActions({
       <div className="flex items-center gap-2">
         <Link
           href={`/admin/products/${productId}`}
-          className="inline-flex h-8 items-center rounded-full border border-border px-3.5 text-xs font-medium text-ink transition-colors hover:bg-paper"
+          className="inline-flex h-8 items-center rounded-xs border border-border px-3.5 text-xs font-medium text-ink transition-colors hover:bg-paper"
         >
           {t("edit")}
         </Link>
@@ -33,7 +33,7 @@ export function ProductRowActions({
           href={`/admin/products/${productId}/label`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-8 items-center rounded-full border border-border px-3.5 text-xs font-medium text-ink transition-colors hover:bg-paper"
+          className="inline-flex h-8 items-center rounded-xs border border-border px-3.5 text-xs font-medium text-ink transition-colors hover:bg-paper"
         >
           {t("printLabel")}
         </Link>
@@ -42,14 +42,14 @@ export function ProductRowActions({
             type="submit"
             disabled={isPending}
             variant={isActive ? "destructive" : "secondary"}
-            className="h-8 rounded-full px-3.5 text-xs"
+            className="h-8 rounded-xs px-3.5 text-xs"
           >
             {isActive ? t("deactivate") : t("activate")}
           </Button>
         </form>
       </div>
       {deactivatedBundles.length > 0 ? (
-        <p role="status" className="max-w-72 text-xs text-gold-strong">
+        <p role="status" className="max-w-72 text-xs font-medium text-ink">
           {t("deactivatedBundlesWarning", {
             names: deactivatedBundles.map((bundle) => bundle.nameFr).join(", "),
           })}

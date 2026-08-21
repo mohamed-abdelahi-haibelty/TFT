@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, CircleCheck } from "lucide-react";
 import type { Metadata } from "next";
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/src/i18n/navigation";
@@ -91,7 +91,7 @@ export default async function AdminUsersPage({
                   <td className="px-5 py-4 text-sm font-medium text-ink">{user.name}</td>
                   <td className="px-5 py-4 text-sm text-ink-soft">{user.email}</td>
                   <td className="px-5 py-4">
-                    <span className="inline-flex items-center rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-ink">
+                    <span className="inline-flex items-center rounded-xs border border-border px-2.5 py-1 text-xs font-semibold text-ink">
                       {user.role === "admin" ? t("roleAdmin") : t("roleStaff")}
                     </span>
                   </td>
@@ -99,15 +99,15 @@ export default async function AdminUsersPage({
                     <span
                       className={
                         user.isActive
-                          ? "inline-flex items-center gap-1.5 rounded-full bg-green-bg px-2.5 py-1 text-xs font-semibold text-green-text"
-                          : "inline-flex items-center gap-1.5 rounded-full bg-red-bg px-2.5 py-1 text-xs font-semibold text-red-text"
+                          ? "inline-flex items-center gap-1.5 rounded-xs px-2.5 py-1 text-xs font-semibold text-ink"
+                          : "inline-flex items-center gap-1.5 rounded-xs border border-ink px-2.5 py-1 text-xs font-semibold text-ink"
                       }
                     >
-                      <span
-                        className={
-                          user.isActive ? "size-2 rounded-full bg-green" : "size-2 rounded-full bg-red"
-                        }
-                      />
+                      {user.isActive ? (
+                        <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+                      )}
                       {user.isActive ? t("statusActive") : t("statusInactive")}
                     </span>
                   </td>
@@ -120,7 +120,7 @@ export default async function AdminUsersPage({
                     ) : (
                       <Link
                         href={`/admin/users/${user.id}`}
-                        className="group inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-muted active:translate-y-0"
+                        className="group inline-flex items-center gap-1.5 rounded-xs border border-border px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-muted"
                       >
                         {user.permissions.length === 0
                           ? t("accessNone")

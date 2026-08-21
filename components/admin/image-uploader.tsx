@@ -291,10 +291,10 @@ export function ImageUploader({
           }}
           className={cn(
             "flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-border px-6 py-10 text-center transition-colors",
-            isDragOver && "border-gold bg-gold-soft/40",
+            isDragOver && "border-ink bg-secondary",
           )}
         >
-          <span className="flex size-12 items-center justify-center rounded-full bg-gold-soft text-gold-strong">
+          <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-ink">
             <ImagePlus className="size-5" aria-hidden="true" />
           </span>
           <span className="font-medium text-ink">{t("dropzoneTitle")}</span>
@@ -355,7 +355,7 @@ export function ImageUploader({
                       event.stopPropagation();
                       void remove(item);
                     }}
-                    className="absolute end-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-ink/70 text-paper transition-colors hover:bg-red-strong"
+                    className="absolute end-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-ink/70 text-paper transition-colors hover:bg-plum"
                   >
                     <X className="size-3.5" aria-hidden="true" />
                   </button>
@@ -365,9 +365,9 @@ export function ImageUploader({
               {item.status === "uploading" ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-ink/45">
                   <span className="text-sm font-semibold text-paper">{item.progress}%</span>
-                  <div className="h-1.5 w-4/5 overflow-hidden rounded-full bg-paper/30">
+                  <div className="h-1.5 w-4/5 overflow-hidden rounded-xs bg-paper/30">
                     <div
-                      className="h-full rounded-full bg-gold transition-[width] duration-150 ease-out"
+                      className="h-full rounded-xs bg-ink transition-[width] duration-150 ease-out"
                       style={{ width: `${item.progress}%` }}
                     />
                   </div>
@@ -375,9 +375,9 @@ export function ImageUploader({
               ) : null}
 
               {item.status === "error" ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-red-bg/95 p-2 text-center">
-                  <AlertTriangle className="size-5 text-red-text" aria-hidden="true" />
-                  <p className="text-xs font-medium text-red-text">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 border border-plum bg-paper/95 p-2 text-center">
+                  <AlertTriangle className="size-5 text-plum" aria-hidden="true" />
+                  <p className="text-xs font-medium text-plum">
                     {item.errorKey ? t(item.errorKey) : t("uploadFailed")}
                   </p>
                   <div className="flex items-center gap-1">
@@ -385,7 +385,7 @@ export function ImageUploader({
                       type="button"
                       onClick={() => retry(item)}
                       disabled={!item.file}
-                      className="inline-flex h-7 items-center gap-1 rounded-full bg-ink px-2.5 text-xs font-medium text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50"
+                      className="inline-flex h-7 items-center gap-1 rounded-xs bg-ink px-2.5 text-xs font-medium text-paper transition-colors disabled:pointer-events-none disabled:opacity-50"
                     >
                       <RotateCw className="size-3" aria-hidden="true" />
                       {t("retry")}
@@ -394,7 +394,7 @@ export function ImageUploader({
                       type="button"
                       aria-label={t("remove")}
                       onClick={() => void remove(item)}
-                      className="flex size-7 items-center justify-center rounded-full text-red-text transition-colors hover:bg-red-strong hover:text-paper"
+                      className="flex size-7 items-center justify-center rounded-full text-plum transition-colors hover:bg-plum hover:text-paper"
                     >
                       <X className="size-3.5" aria-hidden="true" />
                     </button>
@@ -418,8 +418,8 @@ export function ImageUploader({
                 if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files);
               }}
               className={cn(
-                "flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed border-border text-ink-soft transition-colors hover:border-gold hover:text-gold-strong",
-                isDragOver && "border-gold bg-gold-soft/40 text-gold-strong",
+                "flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed border-border text-ink-soft transition-colors hover:border-ink hover:text-ink",
+                isDragOver && "border-ink bg-secondary text-ink",
               )}
             >
               <Plus className="size-5" aria-hidden="true" />

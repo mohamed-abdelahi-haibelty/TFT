@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CircleCheck, XCircle } from "lucide-react";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
@@ -69,7 +69,7 @@ export default async function AdminProductsPage({
         {hasPermission(auth.data, "catalog.pricing") ? (
           <Link
             href="/admin/products/new"
-            className="inline-flex h-10 items-center rounded-full bg-ink px-5 text-sm font-medium text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0"
+            className="inline-flex h-10 items-center rounded-xs bg-ink px-5 text-sm font-medium text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
           >
             {t("addProduct")}
           </Link>
@@ -84,7 +84,7 @@ export default async function AdminProductsPage({
           name="q"
           defaultValue={query.q}
           placeholder={t("searchPlaceholder")}
-          className="h-10 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+          className="h-10 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-0"
         />
         <Select name="category" defaultValue={query.category ?? ""}>
           <SelectTrigger size="md" className="w-40">
@@ -104,13 +104,13 @@ export default async function AdminProductsPage({
             type="checkbox"
             name="activeOnly"
             defaultChecked={query.activeOnly === "on"}
-            className="size-5 rounded border-border accent-gold"
+            className="size-5 rounded border-border accent-ink"
           />
           {t("activeOnlyLabel")}
         </label>
         <button
           type="submit"
-          className="h-10 rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+          className="h-10 rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
         >
           {t("filterSubmit")}
         </button>
@@ -186,12 +186,12 @@ export default async function AdminProductsPage({
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono text-sm text-ink">{product.stockQty}</span>
                         {isOut ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-red-bg px-2 py-0.5 text-xs font-semibold text-red-text">
+                          <span className="inline-flex items-center gap-1 rounded-xs border border-ink px-2 py-0.5 text-xs font-semibold text-ink">
                             <AlertTriangle className="size-3" aria-hidden="true" />
                             {t("outOfStock")}
                           </span>
                         ) : isLow ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-gold-soft px-2 py-0.5 text-xs font-semibold text-gold-strong">
+                          <span className="inline-flex items-center gap-1 rounded-xs border border-ink px-2 py-0.5 text-xs font-semibold text-ink">
                             <AlertTriangle className="size-3" aria-hidden="true" />
                             {t("lowStock")}
                           </span>
@@ -202,15 +202,15 @@ export default async function AdminProductsPage({
                       <span
                         className={
                           product.isActive
-                            ? "inline-flex items-center gap-1.5 rounded-full bg-green-bg px-2.5 py-1 text-xs font-semibold text-green-text"
-                            : "inline-flex items-center gap-1.5 rounded-full bg-red-bg px-2.5 py-1 text-xs font-semibold text-red-text"
+                            ? "inline-flex items-center gap-1.5 text-xs font-semibold text-ink"
+                            : "inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft"
                         }
                       >
-                        <span
-                          className={
-                            product.isActive ? "size-2 rounded-full bg-green" : "size-2 rounded-full bg-red"
-                          }
-                        />
+                        {product.isActive ? (
+                          <CircleCheck className="size-3.5" aria-hidden="true" />
+                        ) : (
+                          <XCircle className="size-3.5" aria-hidden="true" />
+                        )}
                         {product.isActive ? t("statusActive") : t("statusInactive")}
                       </span>
                     </td>

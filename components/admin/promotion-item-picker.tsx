@@ -67,7 +67,7 @@ export function PromotionItemPicker({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-full border border-border p-1">
+        <div className="inline-flex rounded-xs border border-border p-1">
           {(["products", "bundles"] as const).map((value) => (
             <button
               key={value}
@@ -75,8 +75,8 @@ export function PromotionItemPicker({
               onClick={() => setTab(value)}
               className={
                 tab === value
-                  ? "rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper focus-visible:ring-3 focus-visible:ring-gold/30"
-                  : "rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink focus-visible:ring-3 focus-visible:ring-gold/30"
+                  ? "rounded-xs bg-ink px-4 py-2 text-sm font-medium text-paper focus-visible:ring-0"
+                  : "rounded-xs px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink focus-visible:ring-0"
               }
             >
               {value === "products" ? t("pickerTabProducts") : t("pickerTabBundles")}
@@ -94,7 +94,7 @@ export function PromotionItemPicker({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("pickerSearchPlaceholder")}
-            className="h-10 w-full rounded-md border border-border ps-9 pe-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+            className="h-10 w-full rounded-md border border-border ps-9 pe-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-0"
           />
         </div>
 
@@ -117,7 +117,7 @@ export function PromotionItemPicker({
               type="button"
               disabled={!categoryId}
               onClick={() => onAddCategory(categoryId)}
-              className="inline-flex h-11 items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-3 focus-visible:ring-gold/30 disabled:pointer-events-none disabled:opacity-50"
+              className="inline-flex h-11 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-50"
             >
               {t("pickerAddCategory")}
             </button>
@@ -165,7 +165,7 @@ export function PromotionItemPicker({
                           aria-label={t("addItem")}
                           disabled={selectedProducts.has(product.id)}
                           onClick={() => onAddProduct(product)}
-                          className="flex size-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-gold-soft hover:text-gold-strong focus-visible:ring-3 focus-visible:ring-gold/30 disabled:pointer-events-none disabled:opacity-40"
+                          className="flex size-11 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-paper hover:text-ink focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-40"
                         >
                           <Plus className="size-4" aria-hidden="true" />
                         </button>
@@ -194,7 +194,7 @@ export function PromotionItemPicker({
                         aria-label={t("addItem")}
                         disabled={selectedBundles.has(bundle.id)}
                         onClick={() => onAddBundle(bundle)}
-                        className="flex size-8 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-gold-soft hover:text-gold-strong disabled:pointer-events-none disabled:opacity-40"
+                        className="flex size-8 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:pointer-events-none disabled:opacity-40"
                       >
                         <Plus className="size-4" aria-hidden="true" />
                       </button>

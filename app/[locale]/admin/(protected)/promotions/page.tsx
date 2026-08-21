@@ -20,18 +20,15 @@ export async function generateMetadata({
   return { title: t("title") };
 }
 
+// Monochrome status vocabulary (Atelier Blanc): scheduled/disabled are the
+// "needs a look" tier (bordered ink, same technique as OrderStatusBadge's
+// attention tier), active is the resolved/positive tier (plain ink text),
+// ended stays the neutral bordered-gray it already was.
 const STATUS_BADGE_CLASS: Record<PromotionStatus, string> = {
-  scheduled: "bg-gold-soft text-gold-strong",
-  active: "bg-green-bg text-green-text",
+  scheduled: "border border-ink text-ink",
+  active: "text-ink",
   ended: "border border-border text-ink",
-  disabled: "bg-red-bg text-red-text",
-};
-
-const STATUS_DOT_CLASS: Record<PromotionStatus, string> = {
-  scheduled: "bg-gold",
-  active: "bg-green",
-  ended: "",
-  disabled: "bg-red",
+  disabled: "border border-ink text-ink",
 };
 
 function formatDiscount(promotion: PromotionListItem): string {
@@ -121,7 +118,7 @@ export default async function AdminPromotionsPage({
         {hasPermission(auth.data, "promotions.manage") ? (
           <Link
             href="/admin/promotions/new"
-            className="inline-flex h-10 items-center rounded-full bg-ink px-5 text-sm font-medium text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 focus-visible:ring-3 focus-visible:ring-gold/30"
+            className="inline-flex h-10 items-center rounded-xs bg-ink px-5 text-sm font-medium text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] focus-visible:ring-3 focus-visible:ring-ink/30"
           >
             {t("addPromotion")}
           </Link>
@@ -134,7 +131,7 @@ export default async function AdminPromotionsPage({
           name="q"
           defaultValue={query.q}
           placeholder={t("searchPlaceholder")}
-          className="h-10 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+          className="h-10 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
         />
         <Select name="status" defaultValue={query.status ?? ""}>
           <SelectTrigger size="md" className="w-40">
@@ -151,7 +148,7 @@ export default async function AdminPromotionsPage({
         </Select>
         <button
           type="submit"
-          className="h-10 rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-3 focus-visible:ring-gold/30"
+          className="h-10 rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-3 focus-visible:ring-ink/30"
         >
           {t("filterSubmit")}
         </button>
@@ -198,7 +195,7 @@ export default async function AdminPromotionsPage({
                       {hasPermission(auth.data, "promotions.manage") ? (
                         <Link
                           href="/admin/promotions/new"
-                          className="inline-flex h-10 items-center rounded-full border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-3 focus-visible:ring-gold/30"
+                          className="inline-flex h-10 items-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-3 focus-visible:ring-ink/30"
                         >
                           {t("addPromotion")}
                         </Link>
@@ -233,11 +230,8 @@ export default async function AdminPromotionsPage({
                   <td className="px-5 py-4">
                     <div className="flex flex-col items-start gap-1">
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[promotion.status]}`}
+                        className={`inline-flex items-center rounded-xs px-2.5 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[promotion.status]}`}
                       >
-                        {STATUS_DOT_CLASS[promotion.status] ? (
-                          <span className={`size-2 rounded-full ${STATUS_DOT_CLASS[promotion.status]}`} />
-                        ) : null}
                         {statusLabel(t, promotion.status)}
                       </span>
                       {promotion.status === "active" ? (

@@ -22,7 +22,7 @@ export function LoginForm() {
           autoComplete="email"
           defaultValue={state?.email ?? ""}
           required
-          className="h-11 rounded-md border-border px-3.5 text-base focus-visible:border-gold focus-visible:ring-gold/30"
+          className="h-11 rounded-xs border-border px-3.5 text-base focus-visible:border-ink focus-visible:ring-0"
         />
       </div>
 
@@ -34,13 +34,13 @@ export function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
-          className="h-11 rounded-md border-border px-3.5 text-base focus-visible:border-gold focus-visible:ring-gold/30"
+          className="h-11 rounded-xs border-border px-3.5 text-base focus-visible:border-ink focus-visible:ring-0"
         />
       </div>
 
       <div aria-live="polite">
         {state && !state.ok ? (
-          <p className="rounded-md bg-red-bg px-3.5 py-2.5 text-sm text-red-text">
+          <p className="rounded-xs border border-plum px-3.5 py-2.5 text-sm font-semibold text-plum" role="alert">
             {state.error.message}
           </p>
         ) : null}
@@ -49,7 +49,7 @@ export function LoginForm() {
       <Button
         type="submit"
         disabled={isPending}
-        className="h-11 w-full rounded-full bg-gold text-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-gold-strong active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0"
+        className="h-11 w-full rounded-xs bg-ink text-xs font-semibold tracking-wider text-paper uppercase transition-colors hover:bg-[oklch(0.29_0.012_59.14)] disabled:opacity-70"
       >
         {isPending ? t("submitting") : t("submit")}
       </Button>

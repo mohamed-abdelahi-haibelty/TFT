@@ -51,7 +51,7 @@ export function PromotionRowActions({
               type="submit"
               ref={confirmRef}
               disabled={isPending}
-              className="h-11 rounded-full bg-ink px-4 text-sm text-paper hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
+              className="h-11 rounded-xs bg-ink px-4 text-sm text-paper hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
             >
               {isPending ? t("deactivateSubmitting") : t("deactivate")}
             </Button>
@@ -59,14 +59,14 @@ export function PromotionRowActions({
           <Button
             type="button"
             variant="ghost"
-            className="h-11 rounded-full px-4 text-sm"
+            className="h-11 rounded-xs px-4 text-sm"
             onClick={() => setConfirmingDeactivate(false)}
           >
             {t("cancel")}
           </Button>
         </div>
         {state && !state.ok ? (
-          <p className="text-xs text-red-text" aria-live="polite">
+          <p className="text-xs font-semibold text-plum" aria-live="polite">
             {state.error.message}
           </p>
         ) : null}
@@ -78,7 +78,7 @@ export function PromotionRowActions({
     <div className="flex items-center gap-2">
       <Link
         href={`/admin/promotions/${promotionId}`}
-        className="inline-flex h-11 items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-3 focus-visible:ring-gold/30"
+        className="inline-flex h-11 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-0"
       >
         {t("edit")}
       </Link>
@@ -86,20 +86,20 @@ export function PromotionRowActions({
         <Button
           type="button"
           variant="secondary"
-          className="h-11 rounded-full px-4 text-sm"
+          className="h-11 rounded-xs px-4 text-sm"
           onClick={() => setConfirmingDeactivate(true)}
         >
           {t("deactivate")}
         </Button>
       ) : (
         <form action={formAction}>
-          <Button type="submit" disabled={isPending} className="h-11 rounded-full px-4 text-sm">
+          <Button type="submit" disabled={isPending} className="h-11 rounded-xs px-4 text-sm">
             {isPending ? t("activateSubmitting") : t("activate")}
           </Button>
         </form>
       )}
       {state && !state.ok ? (
-        <p className="text-xs text-red-text" aria-live="polite">
+        <p className="text-xs font-semibold text-plum" aria-live="polite">
           {state.error.message}
         </p>
       ) : null}

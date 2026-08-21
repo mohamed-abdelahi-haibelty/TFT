@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CircleCheck, XCircle } from "lucide-react";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
@@ -56,7 +56,7 @@ export default async function AdminBundlesPage({
         {canCreate ? (
           <Link
             href="/admin/bundles/new"
-            className="inline-flex h-11 items-center rounded-full bg-ink px-5 text-sm font-medium text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0"
+            className="inline-flex h-11 items-center rounded-xs bg-ink px-5 text-sm font-medium text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
           >
             {t("addBundle")}
           </Link>
@@ -69,20 +69,20 @@ export default async function AdminBundlesPage({
           name="q"
           defaultValue={query.q}
           placeholder={t("searchPlaceholder")}
-          className="h-10 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+          className="h-10 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-0"
         />
         <label className="flex items-center gap-2 text-sm text-ink">
           <input
             type="checkbox"
             name="activeOnly"
             defaultChecked={query.activeOnly === "on"}
-            className="size-5 rounded border-border accent-gold"
+            className="size-5 rounded border-border accent-ink"
           />
           {t("activeOnlyLabel")}
         </label>
         <button
           type="submit"
-          className="h-10 rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+          className="h-10 rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
         >
           {t("filterSubmit")}
         </button>
@@ -93,7 +93,7 @@ export default async function AdminBundlesPage({
         {isFiltered ? (
           <Link
             href="/admin/bundles"
-            className="text-sm font-medium text-gold-strong underline-offset-4 hover:underline"
+            className="text-sm font-medium text-ink underline-offset-4 hover:underline"
           >
             {t("clearFilters")}
           </Link>
@@ -136,7 +136,7 @@ export default async function AdminBundlesPage({
                       <p className="text-sm text-ink-soft">{t("emptyNoMatches")}</p>
                       <Link
                         href="/admin/bundles"
-                        className="inline-flex h-11 items-center rounded-full border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
+                        className="inline-flex h-11 items-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
                       >
                         {t("clearFilters")}
                       </Link>
@@ -147,7 +147,7 @@ export default async function AdminBundlesPage({
                       {canManage ? (
                         <Link
                           href="/admin/bundles/new"
-                          className="inline-flex h-11 items-center rounded-full bg-ink px-5 text-sm font-medium text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0"
+                          className="inline-flex h-11 items-center rounded-xs bg-ink px-5 text-sm font-medium text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
                         >
                           {t("addBundle")}
                         </Link>
@@ -176,7 +176,7 @@ export default async function AdminBundlesPage({
                       {canManage ? (
                         <Link
                           href={`/admin/bundles/${bundle.id}`}
-                          className="block text-sm font-medium text-nowrap text-ink transition-colors hover:text-gold-strong"
+                          className="block text-sm font-medium text-nowrap text-ink hover:underline"
                         >
                           {primaryName}
                         </Link>
@@ -196,29 +196,29 @@ export default async function AdminBundlesPage({
                           {bundle.maxSellable === null ? t("availabilityUnlimited") : bundle.maxSellable}
                         </span>
                         {isOut ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-gold-soft px-2 py-0.5 text-xs font-semibold text-gold-strong">
+                          <span className="inline-flex items-center gap-1 rounded-xs border border-ink px-2 py-0.5 text-xs font-semibold text-ink">
                             <AlertTriangle className="size-3" aria-hidden="true" />
                             {t("outOfStock")}
                           </span>
                         ) : null}
                       </div>
                       {bundle.limitBy ? (
-                        <p className="mt-0.5 text-xs text-gold-strong">{t("limitedBy", { name: limitName })}</p>
+                        <p className="mt-0.5 text-xs text-ink-soft">{t("limitedBy", { name: limitName })}</p>
                       ) : null}
                     </td>
                     <td className="px-5 py-4">
                       <span
                         className={
                           bundle.isActive
-                            ? "inline-flex items-center gap-1.5 rounded-full bg-green-bg px-2.5 py-1 text-xs font-semibold text-green-text"
-                            : "inline-flex items-center gap-1.5 rounded-full bg-red-bg px-2.5 py-1 text-xs font-semibold text-red-text"
+                            ? "inline-flex items-center gap-1.5 text-xs font-semibold text-ink"
+                            : "inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft"
                         }
                       >
-                        <span
-                          className={
-                            bundle.isActive ? "size-2 rounded-full bg-green" : "size-2 rounded-full bg-red"
-                          }
-                        />
+                        {bundle.isActive ? (
+                          <CircleCheck className="size-3.5" aria-hidden="true" />
+                        ) : (
+                          <XCircle className="size-3.5" aria-hidden="true" />
+                        )}
                         {bundle.isActive ? t("statusActive") : t("statusInactive")}
                       </span>
                     </td>

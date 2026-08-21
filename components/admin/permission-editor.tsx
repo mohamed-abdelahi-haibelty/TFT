@@ -177,7 +177,7 @@ export function PermissionEditor({
                     />
                     <span
                       aria-hidden="true"
-                      className={`mt-px flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors peer-focus-visible:border-gold peer-focus-visible:ring-3 peer-focus-visible:ring-gold/30 ${
+                      className={`mt-px flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors peer-focus-visible:border-ink peer-focus-visible:ring-3 peer-focus-visible:ring-ink/30 ${
                         checked
                           ? lock
                             ? "border-ink-soft bg-ink-soft text-paper"
@@ -196,7 +196,7 @@ export function PermissionEditor({
                         {t(`items.${permission}.description`)}
                       </span>
                       {lock ? (
-                        <span className="mt-2 inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-ink-soft">
+                        <span className="mt-2 inline-flex items-center rounded-xs border border-border px-2.5 py-0.5 text-xs font-medium text-ink-soft">
                           {t("includedWith", { permission: t(`items.${lock}.name`) })}
                         </span>
                       ) : !checked && requires.length ? (
@@ -222,7 +222,7 @@ export function PermissionEditor({
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
         <p className="text-sm" aria-live="polite">
           {isDirty ? (
-            <span className="font-medium text-gold-strong">{t("unsaved")}</span>
+            <span className="font-semibold text-ink">{t("unsaved")}</span>
           ) : (
             <span className="text-ink-soft">{t("grantedCount", { count: saved.length })}</span>
           )}
@@ -233,7 +233,7 @@ export function PermissionEditor({
             <Button
               type="button"
               variant="ghost"
-              className="h-11 rounded-full px-4 text-sm"
+              className="h-11 rounded-xs px-4 text-sm"
               onClick={() => setSelected([])}
             >
               {t("clearAll")}
@@ -242,7 +242,7 @@ export function PermissionEditor({
           <Button
             type="submit"
             disabled={isPending || !isDirty}
-            className="h-11 rounded-full bg-ink px-5 text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0"
+            className="h-11 rounded-xs bg-ink px-5 text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] disabled:opacity-70"
           >
             {isPending ? t("saving") : t("save")}
           </Button>

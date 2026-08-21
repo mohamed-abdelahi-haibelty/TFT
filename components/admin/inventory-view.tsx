@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { AlertTriangle, CheckCircle2, ScanLine, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleAlert, ScanLine, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
@@ -38,12 +38,7 @@ function StockBadge({ item, t }: { item: InventoryItem; t: ReturnType<typeof use
   const isLow = !isOut && item.stockQty <= item.lowStockThreshold;
   if (!isOut && !isLow) return null;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
-        isOut ? "bg-red-bg text-red-text" : "bg-gold-soft text-gold-strong",
-      )}
-    >
+    <span className="inline-flex items-center gap-1 rounded-xs border border-ink px-2 py-0.5 text-xs font-semibold text-ink">
       <AlertTriangle className="size-3" aria-hidden="true" />
       {isOut ? t("outOfStock") : t("lowStock")}
     </span>
@@ -151,7 +146,7 @@ function AdjustForm({
           aria-pressed={mode === "delta"}
           onClick={() => switchMode("delta")}
           className={cn(
-            "h-11 rounded-full border px-4 text-sm font-medium transition-colors",
+            "h-11 rounded-xs border px-4 text-sm font-medium transition-colors",
             mode === "delta" ? "border-ink bg-ink text-paper" : "border-border text-ink hover:bg-background",
           )}
         >
@@ -162,7 +157,7 @@ function AdjustForm({
           aria-pressed={mode === "absolute"}
           onClick={() => switchMode("absolute")}
           className={cn(
-            "h-11 rounded-full border px-4 text-sm font-medium transition-colors",
+            "h-11 rounded-xs border px-4 text-sm font-medium transition-colors",
             mode === "absolute" ? "border-ink bg-ink text-paper" : "border-border text-ink hover:bg-background",
           )}
         >
@@ -183,7 +178,7 @@ function AdjustForm({
             inputMode="numeric"
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            className="h-11 w-32 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+            className="h-11 w-32 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
           />
         </label>
 
@@ -210,7 +205,7 @@ function AdjustForm({
             name="note"
             maxLength={500}
             placeholder={t("notePlaceholder")}
-            className="h-11 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+            className="h-11 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
           />
         </label>
       </div>
@@ -218,18 +213,19 @@ function AdjustForm({
       {rawDelta !== null ? (
         <p className="text-sm font-medium text-ink">{t("adjustPreview", { current, next, delta: (rawDelta > 0 ? "+" : "") + rawDelta })}</p>
       ) : null}
-      {invalidReason ? <p className="text-sm text-red-text">{t("reasonNegativeHint")}</p> : null}
+      {invalidReason ? <p className="text-sm font-medium text-plum">{t("reasonNegativeHint")}</p> : null}
       {state && !state.ok ? (
-        <p role="alert" className="text-sm text-red-text">
+        <p role="alert" className="flex items-start gap-2 text-sm font-semibold text-plum">
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           {state.error.message}
         </p>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={!canSubmit} className="h-11 rounded-full px-5">
+        <Button type="submit" disabled={!canSubmit} className="h-11 rounded-xs px-5">
           {pending ? t("adjustSubmitting") : t("adjustSubmit")}
         </Button>
-        <Button type="button" variant="secondary" className="h-11 rounded-full" onClick={onDone}>
+        <Button type="button" variant="secondary" className="h-11 rounded-xs" onClick={onDone}>
           {t("adjustCancel")}
         </Button>
       </div>
@@ -433,12 +429,7 @@ export function InventoryView({
     else qtyInputRefs.current.delete(key);
   };
 
-  const bannerStyles =
-    feedback?.type === "found"
-      ? "border-green-bg bg-green-bg text-green-text"
-      : feedback?.type === "filtered"
-        ? "border-gold-soft bg-gold-soft text-gold-strong"
-        : "border-red-bg bg-red-bg text-red-text";
+  const bannerStyles = feedback?.type === "not_found" ? "border-plum text-plum" : "border-ink text-ink";
 
   return (
     <div className="flex flex-col gap-8">
@@ -447,7 +438,7 @@ export function InventoryView({
           <h1 className="font-heading text-2xl font-bold text-ink">{t("title")}</h1>
           <p className="mt-1 text-sm text-ink-soft">{t("subtitle")}</p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-ink-soft">
+        <div className="inline-flex items-center gap-2 rounded-xs border border-border px-3.5 py-1.5 text-xs font-medium text-ink-soft">
           <ScanLine className="size-4" aria-hidden="true" />
           {t("scannerHint")}
         </div>
@@ -498,7 +489,7 @@ export function InventoryView({
             type="button"
             onClick={() => setFeedback(null)}
             aria-label={t("dismiss")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full opacity-70 hover:opacity-100"
+            className="flex size-11 shrink-0 items-center justify-center rounded-xs opacity-70 transition-colors hover:opacity-100"
           >
             <X className="size-4" aria-hidden="true" />
           </button>
@@ -511,7 +502,7 @@ export function InventoryView({
           name="q"
           defaultValue={query.q}
           placeholder={t("searchPlaceholder")}
-          className="h-11 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+          className="h-11 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
         />
         <Select
           name="category"
@@ -535,13 +526,13 @@ export function InventoryView({
             type="checkbox"
             name="lowStockOnly"
             defaultChecked={query.lowStockOnly === "on"}
-            className="size-5 rounded border-border accent-gold"
+            className="size-5 rounded border-border accent-ink"
           />
           {t("lowStockOnlyLabel")}
         </label>
         <button
           type="submit"
-          className="h-11 rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+          className="h-11 rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
         >
           {t("filterSubmit")}
         </button>

@@ -1,31 +1,37 @@
+import {
+  CircleCheck,
+  Clock3,
+  PackageCheck,
+  PackageOpen,
+  Truck,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrderStatusValue } from "@/src/lib/order-tracking";
 
-const BADGE_STYLES: Record<OrderStatusValue, string> = {
-  pending: "bg-gold-soft text-ink",
-  confirmed: "bg-blue-bg text-blue-text",
-  preparing: "bg-blue-bg text-blue-text",
-  shipped: "bg-violet-bg text-violet-text",
-  arrived: "bg-violet-bg text-violet-text",
-  ready: "bg-violet-bg text-violet-text",
-  delivered: "bg-green-bg text-green-text",
-  cancelled: "bg-red-bg text-red-text",
-  voided: "bg-red-bg text-red-text",
+/**
+ * Monochrome, Atelier Blanc-style status vocabulary — the old five-hue
+ * family (gold/blue/green/red/violet) is retired; a state reads through
+ * icon, weight, and the presence of a border, never through color, exactly
+ * the technique the storefront's own StockBadge already uses (bordered =
+ * needs a look, plain = calm, semibold = resolved).
+ */
+const ICONS: Record<OrderStatusValue, LucideIcon> = {
+  pending: Clock3,
+  confirmed: PackageOpen,
+  preparing: PackageOpen,
+  shipped: Truck,
+  arrived: Truck,
+  ready: PackageCheck,
+  delivered: CircleCheck,
+  cancelled: XCircle,
+  voided: XCircle,
 };
 
-const DOT_STYLES: Record<OrderStatusValue, string> = {
-  pending: "bg-gold-strong",
-  confirmed: "bg-blue",
-  preparing: "bg-blue",
-  shipped: "bg-violet",
-  arrived: "bg-violet",
-  ready: "bg-violet",
-  delivered: "bg-green",
-  cancelled: "bg-red",
-  voided: "bg-red",
-};
+/** pending/cancelled/voided need a look, so they get the bordered tier; the rest are calm mid-flow states. */
+const NEEDS_ATTENTION = new Set<OrderStatusValue>(["pending", "cancelled", "voided"]);
 
-/** The five-hue status family, task 13's own mapping: gold = needs action (pending), blue = confirmed work in progress, violet = in transit / awaiting pickup (shipped/arrived/ready), green = done, red = the two terminal non-fulfillment states. */
 export function OrderStatusBadge({
   status,
   label,
@@ -35,15 +41,20 @@ export function OrderStatusBadge({
   label: string;
   className?: string;
 }) {
+  const Icon = ICONS[status];
+  const attention = NEEDS_ATTENTION.has(status);
+  const resolved = status === "delivered";
+
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-        BADGE_STYLES[status],
+        "inline-flex items-center gap-1.5 rounded-xs px-2.5 py-1 text-xs font-semibold tracking-[0.02em]",
+        attention ? "border border-ink text-ink" : "text-ink-soft",
+        resolved && "text-ink",
         className,
       )}
     >
-      <span className={cn("size-2 rounded-full", DOT_STYLES[status])} />
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       {label}
     </span>
   );

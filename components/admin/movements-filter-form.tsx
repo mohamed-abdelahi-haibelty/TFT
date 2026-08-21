@@ -76,7 +76,7 @@ export function MovementsFilterForm({
 
       <button
         type="submit"
-        className="h-11 rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+        className="h-11 rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
       >
         {t("filterSubmit")}
       </button>

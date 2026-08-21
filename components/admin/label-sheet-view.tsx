@@ -137,7 +137,7 @@ export function LabelSheetView({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("searchPlaceholder")}
-              className="h-10 w-full rounded-md border border-border ps-9 pe-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+              className="h-10 w-full rounded-md border border-border ps-9 pe-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
             />
           </div>
           {/* `w-44` clipped "Toutes les catégories" to "Toutes les catégorie"
@@ -230,7 +230,7 @@ export function LabelSheetView({
                               type="checkbox"
                               checked={checked}
                               onChange={() => toggle(item)}
-                              className="size-5 rounded border-border accent-gold"
+                              className="size-5 rounded border-border accent-ink"
                             />
                           </label>
                         </td>
@@ -263,7 +263,7 @@ export function LabelSheetView({
               max={50}
               value={copies}
               onChange={(event) => setCopies(Math.min(50, Math.max(1, Number(event.target.value) || 1)))}
-              className="h-11 w-24 rounded-md border border-border px-3 font-mono text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+              className="h-11 w-24 rounded-md border border-border px-3 font-mono text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
             />
           </div>
 
@@ -271,7 +271,7 @@ export function LabelSheetView({
             type="button"
             onClick={() => window.print()}
             disabled={selectedItems.length === 0}
-            className="inline-flex h-11 w-fit items-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex h-11 w-fit items-center gap-2 rounded-xs bg-ink px-5 text-sm font-medium text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] disabled:pointer-events-none disabled:opacity-50"
           >
             <Printer className="size-4" aria-hidden="true" />
             {t("printAction")}

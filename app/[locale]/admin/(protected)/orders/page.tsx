@@ -102,8 +102,8 @@ export default async function AdminOrdersPage({
 
   const allPillClassName = (active: boolean) =>
     active
-      ? "inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-paper transition-colors hover:bg-ink/90"
-      : "inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-paper";
+      ? "inline-flex items-center gap-1.5 rounded-xs bg-ink px-3 py-1.5 text-xs font-semibold text-paper transition-colors hover:bg-ink/90"
+      : "inline-flex items-center gap-1.5 rounded-xs border border-border px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-paper";
 
   const canManageOrders = hasPermission(auth.data, "orders.manage");
 
@@ -136,7 +136,7 @@ export default async function AdminOrdersPage({
             <Link
               key={value}
               href={{ pathname: "/admin/orders", query: { ...baseQuery, status: value } }}
-              className="rounded-full transition-opacity hover:opacity-80"
+              className="rounded-xs transition-opacity hover:opacity-80"
             >
               <OrderStatusBadge
                 status={value}
@@ -155,7 +155,7 @@ export default async function AdminOrdersPage({
           defaultValue={query.q}
           placeholder={t("filters.searchPlaceholder")}
           aria-label={t("filters.searchPlaceholder")}
-          className="h-10 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+          className="h-10 min-w-56 flex-1 rounded-md border border-border px-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-0"
         />
         <Select name="source" defaultValue={source ?? ""}>
           <SelectTrigger size="md" className="w-32">
@@ -195,14 +195,14 @@ export default async function AdminOrdersPage({
         </label>
         <button
           type="submit"
-          className="h-10 rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+          className="h-10 rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
         >
           {t("filters.submit")}
         </button>
         {hasFilters ? (
           <Link
             href="/admin/orders"
-            className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm text-ink-soft transition-colors hover:text-ink"
+            className="inline-flex h-10 items-center gap-1.5 rounded-xs px-3 text-sm text-ink-soft transition-colors hover:text-ink"
           >
             <FilterX className="size-4" aria-hidden="true" />
             {t("filters.clear")}
@@ -217,7 +217,7 @@ export default async function AdminOrdersPage({
           <p className="text-sm text-ink-soft">{t("error")}</p>
           <Link
             href={{ pathname: "/admin/orders", query: { ...baseQuery, status } }}
-            className="inline-flex h-9 items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+            className="inline-flex h-9 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
           >
             {t("errorRetry")}
           </Link>
@@ -310,7 +310,7 @@ export default async function AdminOrdersPage({
                   <Link
                     href={prevHref}
                     aria-label={t("pagePrev")}
-                    className="inline-flex h-9 items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+                    className="inline-flex h-9 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
                   >
                     {t("pagePrev")}
                   </Link>
@@ -319,7 +319,7 @@ export default async function AdminOrdersPage({
                   <Link
                     href={nextHref}
                     aria-label={t("pageNext")}
-                    className="inline-flex h-9 items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+                    className="inline-flex h-9 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
                   >
                     {t("pageNext")}
                   </Link>

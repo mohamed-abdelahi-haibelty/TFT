@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { X } from "lucide-react";
+import { CircleCheck, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,7 @@ export type VariantFormState = {
 };
 
 const inputClass =
-  "h-10 rounded-md border-border px-3 text-sm focus-visible:border-gold focus-visible:ring-gold/30";
+  "h-10 rounded-md border-border px-3 text-sm focus-visible:border-ink focus-visible:ring-0";
 
 export function VariantRow({
   variant,
@@ -80,7 +80,7 @@ export function VariantRow({
 
         <div className="flex items-center gap-2">
           {isSaved ? (
-            <span className="rounded-full border border-border px-2.5 py-1 font-mono text-xs text-ink-soft">
+            <span className="rounded-xs border border-border px-2.5 py-1 font-mono text-xs text-ink-soft">
               {variant.sku}
             </span>
           ) : null}
@@ -89,7 +89,7 @@ export function VariantRow({
               type="button"
               aria-label={t("removeVariant")}
               onClick={onRemove}
-              className="flex size-8 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-red-bg hover:text-red-text"
+              className="flex size-8 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-plum hover:text-paper"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -102,18 +102,22 @@ export function VariantRow({
           <span
             className={
               variant.isActive
-                ? "inline-flex items-center gap-1.5 rounded-full bg-green-bg px-2.5 py-1 text-xs font-semibold text-green-text"
-                : "inline-flex items-center gap-1.5 rounded-full bg-red-bg px-2.5 py-1 text-xs font-semibold text-red-text"
+                ? "inline-flex items-center gap-1.5 rounded-xs px-2.5 py-1 text-xs font-semibold text-ink"
+                : "inline-flex items-center gap-1.5 rounded-xs border border-ink px-2.5 py-1 text-xs font-semibold text-ink"
             }
           >
-            <span className={variant.isActive ? "size-2 rounded-full bg-green" : "size-2 rounded-full bg-red"} />
+            {variant.isActive ? (
+              <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" />
+            ) : (
+              <XCircle className="size-3.5 shrink-0" aria-hidden="true" />
+            )}
             {variant.isActive ? t("variantActive") : t("variantInactive")}
           </span>
           {productId && variant.dbId ? (
             <Button
               type="button"
               variant="ghost"
-              className="h-7 rounded-full px-3 text-xs"
+              className="h-7 rounded-xs px-3 text-xs"
               onClick={async () => {
                 // A <form> here would nest inside ProductForm's own <form>,
                 // which is invalid HTML (browsers reparent it and React 19

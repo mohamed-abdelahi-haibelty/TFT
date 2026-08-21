@@ -18,11 +18,13 @@ export function QuickPickToggle({ productId, isQuickPick }: { productId: string;
         type="submit"
         disabled={isPending}
         variant={isQuickPick ? "secondary" : "outline"}
-        className="h-8 rounded-full px-3.5 text-xs"
+        className="h-8 rounded-xs px-3.5 text-xs"
       >
         {isQuickPick ? t("unpinFromPos") : t("pinToPos")}
       </Button>
-      {state && !state.ok ? <p className="max-w-40 text-xs text-red-text">{state.error.message}</p> : null}
+      {state && !state.ok ? (
+        <p className="max-w-40 text-xs font-semibold text-plum">{state.error.message}</p>
+      ) : null}
     </form>
   );
 }

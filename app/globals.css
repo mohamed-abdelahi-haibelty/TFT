@@ -5,10 +5,12 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
-  Token source: DESIGN.md (root). Palette extracted from the TFT logo
-  (gold, ink, sketchbook blue, poppy red, crayon violet) plus a Salla-style
-  green added for "success" — see DESIGN.md's Colors section for the full
-  rationale and the No White-on-Gold / Ink-Not-Black / Status-Color rules.
+  Token source: DESIGN.md (root). One brand, one register now: Ink + white
+  carry structure everywhere, Plum is the single accent, both disciplines —
+  Admin/POS was merged into the storefront's "Atelier Blanc" world on user
+  direction (the prior "Marigold Ledger" gold/status-hue register is
+  retired). See DESIGN.md's Colors section for the full rationale and the
+  Ink-Not-Black / Plum-Is-Not-A-Fill / Errors-Are-Plum rules.
 */
 
 @theme inline {
@@ -57,57 +59,25 @@
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-pill: 9999px;
 
-  /* Brand + status family — DESIGN.md "Colors" */
-  --color-gold: var(--gold);
-  --color-gold-strong: var(--gold-strong);
-  --color-gold-soft: var(--gold-soft);
+  /* Neutral spine + one accent — DESIGN.md "Colors" */
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-paper: var(--paper);
-  --color-blue: var(--blue);
-  --color-blue-text: var(--blue-text);
-  --color-blue-bg: var(--blue-bg);
-  --color-red: var(--red);
-  --color-red-text: var(--red-text);
-  --color-red-bg: var(--red-bg);
-  --color-red-strong: var(--red-strong);
-  --color-green: var(--green);
-  --color-green-text: var(--green-text);
-  --color-green-bg: var(--green-bg);
-  --color-violet: var(--violet);
-  --color-violet-text: var(--violet-text);
-  --color-violet-bg: var(--violet-bg);
-
-  /* Storefront "Atelier Blanc" accent — DESIGN.md's Colors section */
   --color-plum: var(--plum);
   --color-plum-deep: var(--plum-deep);
   --color-plum-soft: var(--plum-soft);
 }
 
 :root {
-  /* Brand + status family (raw values — see DESIGN.md for hex + rationale) */
-  --gold: oklch(0.771 0.144 69.41);
-  --gold-strong: oklch(0.7 0.145 67.39);
-  --gold-soft: oklch(0.947 0.036 78.13);
+  /* Neutral spine (raw values — see DESIGN.md for hex + rationale) */
   --ink: oklch(0.204 0.009 59.14);
   --ink-soft: oklch(0.457 0.012 67.51);
   --paper: oklch(0.982 0.003 84.56);
-  --blue: oklch(0.573 0.126 247.32);
-  --blue-text: oklch(0.463 0.107 248.22);
-  --blue-bg: oklch(0.953 0.016 245.09);
-  --red: oklch(0.626 0.184 29.79);
-  --red-text: oklch(0.532 0.166 30.13);
-  --red-bg: oklch(0.95 0.019 29.55);
-  --red-strong: oklch(0.549 0.174 29.32);
-  --green: oklch(0.621 0.141 152.69);
-  --green-text: oklch(0.515 0.116 153.04);
-  --green-bg: oklch(0.957 0.019 157.87);
-  --violet: oklch(0.565 0.144 305.9);
-  --violet-text: oklch(0.466 0.129 307.23);
-  --violet-bg: oklch(0.944 0.02 311.08);
 
-  /* Storefront "Atelier Blanc" accent — a hue outside the logo family by
-     deliberate choice (see DESIGN.md); deep, muted plum/aubergine. */
+  /* The one accent, both disciplines now — a hue outside the old logo
+     family by deliberate choice (see DESIGN.md); deep, muted plum/aubergine.
+     Text/border/hairline only (The Plum-Is-Not-A-Fill Rule) except where
+     Plum Soft is the named selected-state tint. */
   --plum: oklch(0.36 0.085 337);
   --plum-deep: oklch(0.3 0.09 337);
   --plum-soft: oklch(0.94 0.02 337);
@@ -124,7 +94,10 @@
      (Plus Jakarta Sans in Latin) now that Display means Fraunces. */
   --font-heading: var(--font-latin);
 
-  /* shadcn semantic roles, mapped onto the brand palette above */
+  /* shadcn semantic roles, mapped onto the neutral + Plum palette above.
+     A pure-neutral tint (never Plum — The Plum-Is-Not-A-Fill Rule) backs
+     hover/secondary surfaces everywhere, matching the storefront's own
+     restraint. */
   --background: oklch(1 0 0);
   --foreground: var(--ink);
   --card: oklch(1 0 0);
@@ -133,30 +106,32 @@
   --popover-foreground: var(--ink);
   --primary: var(--ink);
   --primary-foreground: var(--paper);
-  --secondary: var(--gold-soft);
+  --secondary: color-mix(in oklch, var(--ink), white 95%);
   --secondary-foreground: var(--ink);
   --muted: var(--paper);
   --muted-foreground: var(--ink-soft);
-  --accent: var(--gold);
+  --accent: color-mix(in oklch, var(--ink), white 95%);
   --accent-foreground: var(--ink);
-  --destructive: var(--red-strong);
+  --destructive: var(--plum-deep);
   --border: oklch(0.921 0.008 73.74);
   --input: oklch(0.921 0.008 73.74);
-  --ring: var(--gold);
-  --chart-1: var(--blue);
-  --chart-2: var(--green);
-  --chart-3: var(--gold);
-  --chart-4: var(--violet);
-  --chart-5: var(--red);
-  --radius: 1rem;
+  --ring: var(--ink);
+  --chart-1: var(--ink);
+  --chart-2: var(--plum);
+  --chart-3: color-mix(in oklch, var(--ink), white 55%);
+  --chart-4: color-mix(in oklch, var(--plum), white 45%);
+  --chart-5: color-mix(in oklch, var(--ink), white 80%);
+  /* Near-zero, matching the storefront's sharp 2px radius — the shared pill
+     vocabulary ("Marigold Ledger") is retired system-wide. */
+  --radius: 2px;
   --sidebar: var(--background);
   --sidebar-foreground: var(--ink);
   --sidebar-primary: var(--ink);
   --sidebar-primary-foreground: var(--paper);
-  --sidebar-accent: var(--gold-soft);
+  --sidebar-accent: var(--paper);
   --sidebar-accent-foreground: var(--ink);
   --sidebar-border: oklch(0.921 0.008 73.74);
-  --sidebar-ring: var(--gold);
+  --sidebar-ring: var(--ink);
 }
 
 html[dir="rtl"] {
@@ -175,31 +150,31 @@ html[dir="rtl"] {
   --card-foreground: var(--paper);
   --popover: var(--ink);
   --popover-foreground: var(--paper);
-  --primary: var(--gold);
+  --primary: var(--paper);
   --primary-foreground: var(--ink);
   --secondary: oklch(0.269 0.012 67.51);
   --secondary-foreground: var(--paper);
   --muted: oklch(0.269 0.012 67.51);
   --muted-foreground: oklch(0.708 0.012 67.51);
-  --accent: oklch(0.771 0.144 69.41 / 18%);
-  --accent-foreground: var(--gold);
-  --destructive: var(--red-strong);
+  --accent: oklch(0.36 0.085 337 / 18%);
+  --accent-foreground: var(--plum-soft);
+  --destructive: var(--plum);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: var(--gold);
-  --chart-1: var(--blue);
-  --chart-2: var(--green);
-  --chart-3: var(--gold);
-  --chart-4: var(--violet);
-  --chart-5: var(--red);
+  --ring: var(--paper);
+  --chart-1: var(--paper);
+  --chart-2: var(--plum-soft);
+  --chart-3: oklch(0.7 0.006 67.51);
+  --chart-4: oklch(0.5 0.05 337);
+  --chart-5: oklch(0.4 0.006 67.51);
   --sidebar: var(--ink);
   --sidebar-foreground: var(--paper);
-  --sidebar-primary: var(--gold);
+  --sidebar-primary: var(--paper);
   --sidebar-primary-foreground: var(--ink);
   --sidebar-accent: oklch(0.269 0.012 67.51);
   --sidebar-accent-foreground: var(--paper);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: var(--gold);
+  --sidebar-ring: var(--paper);
 }
 
 @layer base {
@@ -211,12 +186,12 @@ html[dir="rtl"] {
   }
   html {
     @apply font-sans;
-    caret-color: var(--gold-strong);
+    caret-color: var(--plum);
     scrollbar-color: var(--border) transparent;
     scrollbar-width: thin;
   }
   ::selection {
-    background-color: var(--gold-soft);
+    background-color: var(--plum-soft);
     color: var(--ink);
   }
   ::-webkit-scrollbar {
@@ -236,21 +211,17 @@ html[dir="rtl"] {
   }
 }
 
-/* Storefront ("Atelier Blanc") keyboard focus — the shared Gold ring at 50%
-   opacity reads at ~1.6:1 against white, below the 3:1 WCAG AA minimum for a
-   focus indicator. The storefront ground is pure white (DESIGN.md), so its
-   focus outline is Ink at full strength with a 2px offset, scoped to the
-   `.storefront` wrapper so Admin/POS keeps its documented Gold ring. */
+/* Keyboard focus, both disciplines — a translucent ring reads too faint
+   against either ground (white on the storefront, paper in Admin/POS
+   content), below the 3:1 WCAG AA minimum for a focus indicator. Ink at
+   full strength with a 2px offset is the shared focus treatment now that
+   both disciplines are one register; `.admin` additionally neutralizes the
+   box-shadow ring the shadcn-style classes still add. */
 .storefront :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
-/* Admin/POS keyboard focus — the Gold ring reads at ~1.05:1 against paper,
-   below the 3:1 WCAG AA minimum (unlike the storefront, the admin shell's
-   content ground is paper, not white). Scope to `.admin` so the login form
-   outside the shell keeps its Gold ring: Ink outline at full strength, and
-   neutralize the Gold box-shadow rings the shadcn-style classes add. */
 .admin :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;

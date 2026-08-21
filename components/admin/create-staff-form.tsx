@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { CircleAlert, CircleCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,7 @@ export function CreateStaffForm() {
             id="staff-name"
             name="name"
             required
-            className="h-11 rounded-md border-border px-3.5 focus-visible:border-gold focus-visible:ring-gold/30"
+            className="h-11 rounded-xs border-border px-3.5 focus-visible:border-ink focus-visible:ring-0"
           />
         </div>
 
@@ -41,7 +42,7 @@ export function CreateStaffForm() {
             name="email"
             type="email"
             required
-            className="h-11 rounded-md border-border px-3.5 focus-visible:border-gold focus-visible:ring-gold/30"
+            className="h-11 rounded-xs border-border px-3.5 focus-visible:border-ink focus-visible:ring-0"
           />
         </div>
 
@@ -54,18 +55,20 @@ export function CreateStaffForm() {
             autoComplete="new-password"
             required
             minLength={8}
-            className="h-11 rounded-md border-border px-3.5 focus-visible:border-gold focus-visible:ring-gold/30"
+            className="h-11 rounded-xs border-border px-3.5 focus-visible:border-ink focus-visible:ring-0"
           />
         </div>
 
         <div className="sm:col-span-3" aria-live="polite">
           {state && !state.ok ? (
-            <p className="rounded-md bg-red-bg px-3.5 py-2.5 text-sm text-red-text">
+            <p role="alert" className="flex items-start gap-2 rounded-xs border border-plum px-3.5 py-2.5 text-sm font-medium text-plum">
+              <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               {state.error.message}
             </p>
           ) : null}
           {state?.ok ? (
-            <p className="rounded-md bg-green-bg px-3.5 py-2.5 text-sm text-green-text">
+            <p className="flex items-center gap-2 text-sm text-ink">
+              <CircleCheck className="size-4 shrink-0" aria-hidden="true" />
               {t("addSuccess")}
             </p>
           ) : null}
@@ -75,7 +78,7 @@ export function CreateStaffForm() {
           <Button
             type="submit"
             disabled={isPending}
-            className="h-10 rounded-full bg-ink px-5 text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0"
+            className="h-10 rounded-xs bg-ink px-5 text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] disabled:opacity-70"
           >
             {isPending ? t("addSubmitting") : t("addSubmit")}
           </Button>

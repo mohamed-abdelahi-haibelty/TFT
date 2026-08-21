@@ -12,7 +12,7 @@ import type { OrderNextAction } from "@/src/services/orders";
 const WHATSAPP_STATUSES: AdminOrderStatusMessageStatus[] = ["pending", "confirmed", "shipped", "arrived", "ready"];
 
 const fieldClassName =
-  "h-9 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30";
+  "h-9 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30";
 
 function AdvanceAction({
   orderId,
@@ -42,10 +42,10 @@ function AdvanceAction({
           </label>
         </>
       ) : null}
-      <Button type="submit" disabled={pending} className="rounded-full">
+      <Button type="submit" disabled={pending} className="rounded-xs">
         {t("advanceTo", { status: statusLabels[next.target] })}
       </Button>
-      {state && !state.ok ? <p className="w-full text-sm text-red-text">{state.error.message}</p> : null}
+      {state && !state.ok ? <p className="w-full text-sm font-medium text-plum">{state.error.message}</p> : null}
     </form>
   );
 }
@@ -134,11 +134,11 @@ export function OrderActionsPanel({
                     </label>
                   </>
                 ) : null}
-                <Button type="submit" disabled={confirmPending} className="rounded-full">
+                <Button type="submit" disabled={confirmPending} className="rounded-xs">
                   {t("confirm")}
                 </Button>
                 {confirmState && !confirmState.ok ? (
-                  <p className="w-full text-sm text-red-text">{confirmState.error.message}</p>
+                  <p className="w-full text-sm font-medium text-plum">{confirmState.error.message}</p>
                 ) : null}
               </form>
             );
@@ -153,7 +153,7 @@ export function OrderActionsPanel({
           href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-10 w-fit items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+          className="inline-flex h-10 w-fit items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
         >
           {t("whatsappCta")}
         </a>
@@ -162,7 +162,7 @@ export function OrderActionsPanel({
       {canCancel ? (
         <div className="border-t border-border pt-4">
           {!showCancel ? (
-            <button type="button" onClick={() => setShowCancel(true)} className="text-sm font-medium text-red-text hover:underline">
+            <button type="button" onClick={() => setShowCancel(true)} className="text-sm font-medium text-plum hover:underline">
               {t("cancelOrder")}
             </button>
           ) : (
@@ -175,14 +175,14 @@ export function OrderActionsPanel({
                 name="reason"
                 required
                 rows={2}
-                className="rounded-md border border-border px-3 py-2 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+                className="rounded-md border border-border px-3 py-2 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
               />
-              {cancelState && !cancelState.ok ? <p className="text-sm text-red-text">{cancelState.error.message}</p> : null}
+              {cancelState && !cancelState.ok ? <p className="text-sm font-medium text-plum">{cancelState.error.message}</p> : null}
               <div className="flex gap-2">
-                <Button type="submit" variant="destructive" disabled={cancelPending} className="rounded-full">
+                <Button type="submit" variant="destructive" disabled={cancelPending} className="rounded-xs">
                   {t("cancelSubmit")}
                 </Button>
-                <Button type="button" variant="secondary" className="rounded-full" onClick={() => setShowCancel(false)}>
+                <Button type="button" variant="secondary" className="rounded-xs" onClick={() => setShowCancel(false)}>
                   {t("cancelDismiss")}
                 </Button>
               </div>
@@ -194,7 +194,7 @@ export function OrderActionsPanel({
       {canVoid ? (
         <div className="border-t border-border pt-4">
           {!showVoid ? (
-            <button type="button" onClick={() => setShowVoid(true)} className="text-sm font-medium text-red-text hover:underline">
+            <button type="button" onClick={() => setShowVoid(true)} className="text-sm font-medium text-plum hover:underline">
               {t("voidOrder")}
             </button>
           ) : (
@@ -207,14 +207,14 @@ export function OrderActionsPanel({
                 name="reason"
                 required
                 rows={2}
-                className="rounded-md border border-border px-3 py-2 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+                className="rounded-md border border-border px-3 py-2 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30"
               />
-              {voidState && !voidState.ok ? <p className="text-sm text-red-text">{voidState.error.message}</p> : null}
+              {voidState && !voidState.ok ? <p className="text-sm font-medium text-plum">{voidState.error.message}</p> : null}
               <div className="flex gap-2">
-                <Button type="submit" variant="destructive" disabled={voidPending} className="rounded-full">
+                <Button type="submit" variant="destructive" disabled={voidPending} className="rounded-xs">
                   {t("voidSubmit")}
                 </Button>
-                <Button type="button" variant="secondary" className="rounded-full" onClick={() => setShowVoid(false)}>
+                <Button type="button" variant="secondary" className="rounded-xs" onClick={() => setShowVoid(false)}>
                   {t("voidDismiss")}
                 </Button>
               </div>

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { AlertTriangle, Lock, X } from "lucide-react";
+import { AlertTriangle, CircleAlert, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,10 +20,9 @@ import { slugify } from "@/src/lib/slug";
 import { createBundleAction, deleteBundleAction, updateBundleAction } from "@/src/services/bundle-actions";
 import type { BundleDetail, BundlePickerProduct } from "@/src/services/bundles";
 
-const inputClass =
-  "h-11 rounded-md border-border px-3.5 focus-visible:border-gold focus-visible:ring-gold/30";
+const inputClass = "h-11 rounded-xs border-border px-3.5 focus-visible:border-ink focus-visible:ring-0";
 const textareaClass =
-  "rounded-md border border-border px-3.5 py-2.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30";
+  "rounded-xs border border-border px-3.5 py-2.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-0";
 
 type FormValues = {
   nameAr: string;
@@ -263,7 +262,7 @@ export function BundleForm({
           {isEditMode ? (
             <div className="flex flex-col gap-1.5">
               <Label>{t("skuLabel")}</Label>
-              <p className="flex h-11 items-center rounded-md border border-border bg-paper px-3.5 font-mono text-sm text-ink-soft">
+              <p className="flex h-11 items-center rounded-xs border border-border bg-paper px-3.5 font-mono text-sm text-ink-soft">
                 {bundle.sku}
               </p>
             </div>
@@ -300,7 +299,7 @@ export function BundleForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>{t("componentSumLabel")}</Label>
-            <p className="flex h-11 items-center rounded-md border border-border bg-paper px-3.5 font-mono text-sm text-ink-soft">
+            <p className="flex h-11 items-center rounded-xs border border-border bg-paper px-3.5 font-mono text-sm text-ink-soft">
               {formatMoney(componentPriceSum)}
             </p>
             <p className="text-xs text-ink-soft">{t("componentSumHint")}</p>
@@ -308,7 +307,7 @@ export function BundleForm({
         </div>
 
         {priceBelowSum ? (
-          <p className="flex items-center gap-2 rounded-md bg-gold-soft px-3.5 py-2.5 text-sm text-gold-strong">
+          <p className="flex items-center gap-2 rounded-xs border border-ink px-3.5 py-2.5 text-sm text-ink">
             <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
             {t("priceBelowSumWarning")}
           </p>
@@ -320,7 +319,7 @@ export function BundleForm({
             name="isActive"
             checked={values.isActive}
             onChange={(event) => set("isActive", event.target.checked)}
-            className="size-5 rounded border-border accent-gold"
+            className="size-5 rounded-xs border-border accent-ink"
           />
           {t("activeLabel")}
         </label>
@@ -360,7 +359,7 @@ export function BundleForm({
                     <p className="text-sm font-medium text-ink">{itemName}</p>
                     <p className="font-mono text-xs text-ink-soft">{item.productSku}</p>
                     {!item.isActive ? (
-                      <p className="mt-1 flex items-center gap-1 text-xs text-red-text">
+                      <p className="mt-1 flex items-center gap-1 text-xs text-ink">
                         <AlertTriangle className="size-3" aria-hidden="true" />
                         {t("inactiveComponentWarning")}
                       </p>
@@ -369,9 +368,7 @@ export function BundleForm({
                   <div className="text-xs text-ink-soft">
                     {t("pickerStock")}: <span className="font-mono text-ink">{item.stock}</span>
                     {item.allowBackorder ? (
-                      <span className="ms-1.5 rounded-full bg-blue-bg px-2 py-0.5 text-xs font-semibold text-blue-text">
-                        {t("pickerBackorder")}
-                      </span>
+                      <span className="ms-1.5 text-xs font-semibold text-ink-soft">{t("pickerBackorder")}</span>
                     ) : null}
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
@@ -392,14 +389,14 @@ export function BundleForm({
                       inputMode="numeric"
                       value={item.qty}
                       onChange={(event) => updateItemQty(item.key, event.target.value)}
-                      className="h-9 w-20 rounded-md border-border px-2.5 font-mono focus-visible:border-gold focus-visible:ring-gold/30"
+                      className="h-9 w-20 rounded-xs border-border px-2.5 font-mono focus-visible:border-ink focus-visible:ring-0"
                     />
                   </div>
                   <button
                     type="button"
                     aria-label={t("removeItem")}
                     onClick={() => removeItem(item.key)}
-                    className="flex size-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-red-bg hover:text-red-text"
+                    className="flex size-11 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-plum hover:text-paper"
                   >
                     <X className="size-4" aria-hidden="true" />
                   </button>
@@ -417,7 +414,7 @@ export function BundleForm({
             </span>
           </p>
           {limitBy ? (
-            <p className="text-xs text-gold-strong">
+            <p className="text-xs text-ink-soft">
               {t("limitedBy", { name: locale === "ar" ? limitBy.nameAr : limitBy.nameFr })}
             </p>
           ) : null}
@@ -426,7 +423,8 @@ export function BundleForm({
 
       <div className="flex flex-col gap-5 border-t border-border pt-8" aria-live="polite">
         {state && !state.ok ? (
-          <p className="rounded-md bg-red-bg px-3.5 py-2.5 text-sm text-red-text">
+          <p role="alert" className="flex items-start gap-2 rounded-xs border border-plum px-3.5 py-2.5 text-sm font-medium text-plum">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             {state.error.message}
           </p>
         ) : null}
@@ -439,24 +437,26 @@ export function BundleForm({
             <div className="flex items-center gap-2">
               <Button
                 type="button"
+                variant="outline"
                 ref={confirmDeleteRef}
                 disabled={isDeletePending}
                 onClick={handleDelete}
-                className="h-11 rounded-full bg-destructive px-4 text-sm text-paper hover:bg-[color-mix(in_oklch,var(--red-strong),black_10%)]"
+                className="h-11 rounded-xs border-plum px-4 text-sm text-plum transition-colors hover:bg-plum hover:text-paper"
               >
                 {isDeletePending ? t("deleteSubmitting") : t("delete")}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                className="h-11 rounded-full px-4 text-sm"
+                className="h-11 rounded-xs px-4 text-sm"
                 onClick={() => setConfirmingDelete(false)}
               >
                 {t("cancel")}
               </Button>
             </div>
             {deleteError ? (
-              <p className="text-xs text-red-text" aria-live="polite">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-plum" aria-live="polite">
+                <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
                 {deleteError}
               </p>
             ) : null}
@@ -468,7 +468,7 @@ export function BundleForm({
         <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/admin/bundles"
-            className="inline-flex h-11 items-center justify-center rounded-full border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
+            className="inline-flex h-11 items-center justify-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
           >
             {t("back")}
           </Link>
@@ -477,7 +477,7 @@ export function BundleForm({
             <Button
               type="button"
               variant="outline"
-              className="h-11 rounded-full border-red-strong/60 px-5 text-sm text-red-strong hover:bg-red-bg"
+              className="h-11 rounded-xs border-plum px-5 text-sm text-plum transition-colors hover:bg-plum hover:text-paper"
               onClick={() => setConfirmingDelete(true)}
             >
               {t("delete")}
@@ -487,7 +487,7 @@ export function BundleForm({
           <Button
             type="submit"
             disabled={isPending || items.length === 0}
-            className="h-11 rounded-full bg-ink px-6 text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0"
+            className="h-11 rounded-xs bg-ink px-6 text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] disabled:opacity-70"
           >
             {isEditMode
               ? isPending

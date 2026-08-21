@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,7 +101,7 @@ export function CategoryRow({
                 defaultValue={category.nameAr}
                 dir="rtl"
                 required
-                className="h-10 w-full rounded-md border-border sm:w-44"
+                className="h-10 w-full rounded-xs border-border sm:w-44"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -113,7 +113,7 @@ export function CategoryRow({
                 defaultValue={category.nameFr}
                 dir="ltr"
                 required
-                className="h-10 w-full rounded-md border-border sm:w-44"
+                className="h-10 w-full rounded-xs border-border sm:w-44"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -125,21 +125,21 @@ export function CategoryRow({
                 defaultValue={category.slug}
                 dir="ltr"
                 required
-                className="h-10 w-full rounded-md border-border font-mono sm:w-40"
+                className="h-10 w-full rounded-xs border-border font-mono sm:w-40"
               />
             </div>
             <div className="flex items-center gap-2">
               <Button
                 type="submit"
                 disabled={isUpdatePending}
-                className="h-10 rounded-full bg-ink px-4 text-sm text-paper hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
+                className="h-10 rounded-xs bg-ink px-4 text-sm text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
               >
                 {isUpdatePending ? t("saveSubmitting") : t("saveSubmit")}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                className="h-10 rounded-full px-4 text-sm"
+                className="h-10 rounded-xs px-4 text-sm"
                 onClick={() => {
                   setIsEditing(false);
                   requestAnimationFrame(() => editButtonRef.current?.focus());
@@ -149,7 +149,8 @@ export function CategoryRow({
               </Button>
             </div>
             {updateState && !updateState.ok ? (
-              <p className="text-sm text-red-text" aria-live="polite">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-plum" aria-live="polite">
+                <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
                 {updateState.error.message}
               </p>
             ) : null}
@@ -176,9 +177,10 @@ export function CategoryRow({
               <form action={deleteFormAction}>
                 <Button
                   type="submit"
+                  variant="outline"
                   ref={confirmDeleteRef}
                   disabled={isDeletePending}
-                  className="h-9 rounded-full bg-destructive px-4 text-xs text-paper hover:bg-[color-mix(in_oklch,var(--red-strong),black_10%)]"
+                  className="h-9 rounded-xs border-plum px-4 text-xs text-plum transition-colors hover:bg-plum hover:text-paper"
                 >
                   {isDeletePending ? t("deleteSubmitting") : t("delete")}
                 </Button>
@@ -186,14 +188,15 @@ export function CategoryRow({
               <Button
                 type="button"
                 variant="ghost"
-                className="h-9 rounded-full px-4 text-xs"
+                className="h-9 rounded-xs px-4 text-xs"
                 onClick={() => setConfirmingDelete(false)}
               >
                 {t("cancel")}
               </Button>
             </div>
             {deleteState && !deleteState.ok ? (
-              <p className="text-xs text-red-text" aria-live="polite">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-plum" aria-live="polite">
+                <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
                 {deleteState.error.message}
               </p>
             ) : null}
@@ -206,7 +209,7 @@ export function CategoryRow({
                 aria-label={t("moveUp")}
                 disabled={isMoving || index === 0}
                 onClick={() => move(-1)}
-                className="flex size-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:opacity-30"
+                className="flex size-11 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:opacity-30"
               >
                 <ChevronUp className="size-4" aria-hidden="true" />
               </button>
@@ -215,7 +218,7 @@ export function CategoryRow({
                 aria-label={t("moveDown")}
                 disabled={isMoving || index === allIds.length - 1}
                 onClick={() => move(1)}
-                className="flex size-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:opacity-30"
+                className="flex size-11 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-paper hover:text-ink disabled:opacity-30"
               >
                 <ChevronDown className="size-4" aria-hidden="true" />
               </button>
@@ -223,7 +226,7 @@ export function CategoryRow({
                 type="button"
                 variant="ghost"
                 ref={editButtonRef}
-                className="h-8 rounded-full px-3.5 text-xs"
+                className="h-8 rounded-xs px-3.5 text-xs"
                 onClick={() => setIsEditing(true)}
               >
                 {t("edit")}
@@ -231,19 +234,21 @@ export function CategoryRow({
               <Button
                 type="button"
                 variant="destructive"
-                className="h-8 rounded-full px-3.5 text-xs"
+                className="h-8 rounded-xs px-3.5 text-xs"
                 onClick={() => setConfirmingDelete(true)}
               >
                 {t("delete")}
               </Button>
             </div>
             {deleteState && !deleteState.ok ? (
-              <p className="text-xs text-red-text" aria-live="polite">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-plum" aria-live="polite">
+                <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
                 {deleteState.error.message}
               </p>
             ) : null}
             {moveError ? (
-              <p className="text-xs text-red-text" aria-live="polite">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-plum" aria-live="polite">
+                <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
                 {moveError}
               </p>
             ) : null}

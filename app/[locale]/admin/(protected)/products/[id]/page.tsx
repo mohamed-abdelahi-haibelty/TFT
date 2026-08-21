@@ -59,7 +59,7 @@ export default async function EditProductPage({
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href={{ pathname: "/admin/inventory/movements", query: { product: product.id } }}
-            className="mt-1 inline-flex h-10 items-center rounded-full border border-border px-5 text-sm font-medium text-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-paper active:translate-y-0"
+            className="mt-1 inline-flex h-10 items-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
           >
             {t("viewStockHistory")}
           </Link>
@@ -67,7 +67,7 @@ export default async function EditProductPage({
             href={`/admin/products/${product.id}/label`}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1 inline-flex h-10 items-center rounded-full border border-border px-5 text-sm font-medium text-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-paper active:translate-y-0"
+            className="mt-1 inline-flex h-10 items-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
           >
             {t("printLabel")}
           </Link>

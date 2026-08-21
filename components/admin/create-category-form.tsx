@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +38,7 @@ export function CreateCategoryForm() {
         aria-expanded={isOpen}
         aria-controls={isOpen ? "category-create-panel" : undefined}
         onClick={() => setIsOpen((open) => !open)}
-        className="h-10 rounded-full bg-ink px-5 text-sm text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0"
+        className="h-10 rounded-xs bg-ink px-5 text-sm text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)]"
       >
         {t("addTitle")}
       </Button>
@@ -52,7 +53,7 @@ export function CreateCategoryForm() {
             <Button
               type="button"
               variant="ghost"
-              className="h-9 rounded-full px-4 text-sm"
+              className="h-9 rounded-xs px-4 text-sm"
               onClick={() => setIsOpen(false)}
             >
               {t("cancel")}
@@ -68,7 +69,7 @@ export function CreateCategoryForm() {
                 name="nameAr"
                 dir="rtl"
                 required
-                className="h-10 rounded-md border-border px-3.5 focus-visible:border-gold focus-visible:ring-gold/30"
+                className="h-10 rounded-xs border-border px-3.5 focus-visible:border-ink focus-visible:ring-0"
               />
             </div>
 
@@ -85,7 +86,7 @@ export function CreateCategoryForm() {
                     slugInputRef.current.value = slugify(event.target.value);
                   }
                 }}
-                className="h-10 rounded-md border-border px-3.5 focus-visible:border-gold focus-visible:ring-gold/30"
+                className="h-10 rounded-xs border-border px-3.5 focus-visible:border-ink focus-visible:ring-0"
               />
             </div>
 
@@ -101,13 +102,14 @@ export function CreateCategoryForm() {
                 onChange={() => {
                   slugTouchedRef.current = true;
                 }}
-                className="h-10 rounded-md border-border px-3.5 font-mono focus-visible:border-gold focus-visible:ring-gold/30"
+                className="h-10 rounded-xs border-border px-3.5 font-mono focus-visible:border-ink focus-visible:ring-0"
               />
             </div>
 
             <div className="sm:col-span-3" aria-live="polite">
               {state && !state.ok ? (
-                <p className="rounded-md bg-red-bg px-3.5 py-2.5 text-sm text-red-text">
+                <p role="alert" className="flex items-start gap-2 rounded-xs border border-plum px-3.5 py-2.5 text-sm font-medium text-plum">
+                  <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                   {state.error.message}
                 </p>
               ) : null}
@@ -117,7 +119,7 @@ export function CreateCategoryForm() {
               <Button
                 type="submit"
                 disabled={isPending}
-                className="h-10 rounded-full bg-ink px-5 text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0"
+                className="h-10 rounded-xs bg-ink px-5 text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] disabled:opacity-70"
               >
                 {isPending ? t("addSubmitting") : t("addSubmit")}
               </Button>

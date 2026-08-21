@@ -82,7 +82,7 @@ export default async function AdminDashboardPage({
           </label>
           <button
             type="submit"
-            className="h-10 rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
+            className="h-10 rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
           >
             {t("monthSubmit")}
           </button>
@@ -150,7 +150,7 @@ export default async function AdminDashboardPage({
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  <AlertTriangle className="size-4 text-gold-strong" aria-hidden="true" />
+                  <AlertTriangle className="size-4 text-ink" aria-hidden="true" />
                   {t("lowStockTitle")}
                 </h2>
                 <Link href="/admin/inventory" className="flex items-center gap-1 text-sm font-medium text-ink hover:underline">
@@ -171,7 +171,7 @@ export default async function AdminDashboardPage({
                           <p className="truncate text-sm text-ink">{variantName ? `${name} — ${variantName}` : name}</p>
                           <p className="font-mono text-xs text-ink-soft">{item.sku}</p>
                         </div>
-                        <span className="shrink-0 rounded-full bg-gold-soft px-2 py-0.5 font-mono text-xs font-semibold text-gold-strong">
+                        <span className="shrink-0 rounded-xs border border-ink px-2 py-0.5 font-mono text-xs font-semibold text-ink">
                           {item.stockQty}
                         </span>
                       </li>
@@ -184,7 +184,7 @@ export default async function AdminDashboardPage({
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  <Clock3 className="size-4 text-blue-text" aria-hidden="true" />
+                  <Clock3 className="size-4 text-ink-soft" aria-hidden="true" />
                   {t("pendingTitle")}
                 </h2>
                 <Link href="/admin/orders" className="flex items-center gap-1 text-sm font-medium text-ink hover:underline">

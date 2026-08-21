@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,8 +67,12 @@ export function ShopSettingsForm({ settings }: { settings: ShopSettings }) {
       </div>
 
       {state && !state.ok ? (
-        <p role="alert" className="rounded-md border border-red bg-red-bg px-3.5 py-2.5 text-sm text-red-text">
-          {state.error.message}
+        <p
+          role="alert"
+          className="flex items-start gap-1.5 rounded-xs border border-plum px-3.5 py-2.5 text-sm font-semibold text-plum"
+        >
+          <CircleAlert className="mt-px size-4 shrink-0" aria-hidden="true" />
+          <span>{state.error.message}</span>
         </p>
       ) : null}
 
@@ -75,7 +80,7 @@ export function ShopSettingsForm({ settings }: { settings: ShopSettings }) {
         <Button
           type="submit"
           disabled={isPending}
-          className="h-10 w-fit rounded-full bg-ink px-5 text-sm text-paper transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] active:translate-y-0 disabled:pointer-events-none disabled:opacity-50"
+          className="h-10 w-fit rounded-xs bg-ink px-5 text-sm text-paper transition-colors hover:bg-[color-mix(in_oklch,var(--ink),white_10%)] disabled:pointer-events-none disabled:opacity-50"
         >
           {isPending ? t("saving") : t("save")}
         </Button>

@@ -73,7 +73,7 @@ export function OrderRowActions({
             </SelectContent>
           </Select>
         ) : null}
-        <Button type="submit" size="sm" disabled={confirmPending} className="rounded-full">
+        <Button type="submit" size="sm" disabled={confirmPending} className="rounded-xs">
           {t("table.confirm")}
         </Button>
         {whatsappUrl ? (
@@ -83,12 +83,12 @@ export function OrderRowActions({
             rel="noopener noreferrer"
             title={t("detail.actions.whatsappCta")}
             aria-label={t("detail.actions.whatsappCta")}
-            className="inline-flex size-8 items-center justify-center rounded-full border border-border text-ink transition-colors hover:bg-paper"
+            className="inline-flex size-8 items-center justify-center rounded-xs border border-border text-ink transition-colors hover:bg-paper"
           >
             <MessageCircle className="size-4" aria-hidden="true" />
           </a>
         ) : null}
-        {confirmState && !confirmState.ok ? <p className="text-xs text-red-text">{confirmState.error.message}</p> : null}
+        {confirmState && !confirmState.ok ? <p className="text-xs font-medium text-plum">{confirmState.error.message}</p> : null}
       </form>
     );
   }
@@ -96,11 +96,11 @@ export function OrderRowActions({
   if (advanceNext && isInlineAdvance(advanceNext.target)) {
     return (
       <form action={advanceFormAction} className="flex flex-col items-end gap-1">
-        <Button type="submit" size="sm" variant="secondary" disabled={advancePending} className="rounded-full">
+        <Button type="submit" size="sm" variant="secondary" disabled={advancePending} className="rounded-xs">
           {t("table.advanceTo", { status: statusLabels[advanceNext.target] })}
         </Button>
         {advanceState && !advanceState.ok ? (
-          <p className="text-xs text-red-text">{advanceState.error.message}</p>
+          <p className="text-xs font-medium text-plum">{advanceState.error.message}</p>
         ) : null}
       </form>
     );

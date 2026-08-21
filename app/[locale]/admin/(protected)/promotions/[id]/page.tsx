@@ -48,7 +48,7 @@ export default async function EditPromotionPage({
       <div>
         <Link
           href="/admin/promotions"
-          className="inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-3 focus-visible:ring-gold/30"
+          className="inline-flex h-10 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper focus-visible:ring-3 focus-visible:ring-ink/30"
         >
           {t("back")}
         </Link>

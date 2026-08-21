@@ -53,7 +53,7 @@ export function BundleItemPicker({
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder={t("pickerSearchPlaceholder")}
-          className="h-10 w-full rounded-md border border-border ps-9 pe-3.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30"
+          className="h-10 w-full rounded-xs border border-border ps-9 pe-3.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-0"
         />
       </div>
 
@@ -113,9 +113,7 @@ export function BundleItemPicker({
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono text-sm text-ink">{product.stockQty}</span>
                           {product.allowBackorder ? (
-                            <span className="rounded-full bg-blue-bg px-2 py-0.5 text-xs font-semibold text-blue-text">
-                              {t("pickerBackorder")}
-                            </span>
+                            <span className="text-xs font-semibold text-ink-soft">{t("pickerBackorder")}</span>
                           ) : null}
                         </div>
                       </td>
@@ -153,7 +151,7 @@ export function BundleItemPicker({
                           aria-label={isAdded ? t("pickerAdded") : t("addItem")}
                           disabled={isAdded}
                           onClick={() => handleAdd(product, chosenVariantId || null)}
-                          className="flex size-11 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-gold-soft hover:text-gold-strong disabled:bg-green-bg disabled:text-green"
+                          className="flex size-11 items-center justify-center rounded-xs text-ink-soft transition-colors hover:bg-ink hover:text-paper disabled:text-ink"
                         >
                           {isAdded ? (
                             <Check className="size-4" aria-hidden="true" />

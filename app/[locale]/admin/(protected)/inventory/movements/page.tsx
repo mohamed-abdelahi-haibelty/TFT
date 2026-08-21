@@ -27,8 +27,11 @@ function movementItemName(locale: string, movement: StockMovementListItem): stri
   return variant ? `${name} — ${variant}` : name;
 }
 
+// Monochrome delta: incoming stock reads as the resolved/positive tier
+// (plain ink), outgoing stock as the calmer soft-ink tier — no color, the
+// sign already carries the meaning.
 function deltaClass(delta: number): string {
-  return delta >= 0 ? "text-green-text" : "text-red-text";
+  return delta >= 0 ? "text-ink" : "text-ink-soft";
 }
 
 function movementQuery(query: Record<string, string | undefined>, page: number): Record<string, string> {
@@ -114,7 +117,7 @@ export default async function AdminInventoryMovementsPage({
 
       <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
         {query.product ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-sm text-ink">
+          <div className="flex flex-wrap items-center gap-2 rounded-xs border border-border px-3.5 py-1.5 text-sm text-ink">
             <span>{t("filteredByItem", { name: filteredItemName ?? query.product })}</span>
             <Link
               href={{ pathname: "/admin/inventory/movements", query: clearItemQuery(query) }}

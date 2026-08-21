@@ -9,7 +9,7 @@ import { addOrderItemAction, removeOrderItemAction, updateOrderItemQtyAction } f
 import type { OrderItemDetail } from "@/src/services/orders";
 
 const fieldClassName =
-  "h-9 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-gold focus-visible:ring-3 focus-visible:ring-gold/30";
+  "h-9 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30";
 
 function OrderItemRow({
   orderId,
@@ -48,24 +48,24 @@ function OrderItemRow({
               onChange={(event) => setQty(Number(event.target.value))}
               className={`${fieldClassName} w-16`}
             />
-            <Button type="submit" size="sm" variant="secondary" disabled={qtyPending || qty === item.qty} className="rounded-full">
+            <Button type="submit" size="sm" variant="secondary" disabled={qtyPending || qty === item.qty} className="rounded-xs">
               {t("saveQty")}
             </Button>
           </form>
         ) : (
           <span className="font-mono text-sm text-ink">{item.qty}</span>
         )}
-        {qtyState && !qtyState.ok ? <p className="mt-1 max-w-56 text-xs text-red-text">{qtyState.error.message}</p> : null}
+        {qtyState && !qtyState.ok ? <p className="mt-1 max-w-56 text-xs font-medium text-plum">{qtyState.error.message}</p> : null}
       </td>
       <td className="px-4 py-3 font-mono text-sm text-ink">{formatMoney(item.unitPrice * item.qty)}</td>
       {editable ? (
         <td className="px-4 py-3">
           <form action={removeFormAction}>
-            <Button type="submit" size="sm" variant="destructive" disabled={removePending} className="rounded-full">
+            <Button type="submit" size="sm" variant="destructive" disabled={removePending} className="rounded-xs">
               {t("removeItem")}
             </Button>
           </form>
-          {removeState && !removeState.ok ? <p className="mt-1 max-w-56 text-xs text-red-text">{removeState.error.message}</p> : null}
+          {removeState && !removeState.ok ? <p className="mt-1 max-w-56 text-xs font-medium text-plum">{removeState.error.message}</p> : null}
         </td>
       ) : null}
     </tr>
@@ -155,11 +155,11 @@ function AddItemForm({
         <input type="number" name="qty" min={1} max={99} defaultValue={1} className={`${fieldClassName} w-16`} />
       </label>
 
-      <Button type="submit" disabled={pending || !selectedId} className="rounded-full">
+      <Button type="submit" disabled={pending || !selectedId} className="rounded-xs">
         {t("addItem.submit")}
       </Button>
 
-      {state && !state.ok ? <p className="w-full text-sm text-red-text">{state.error.message}</p> : null}
+      {state && !state.ok ? <p className="w-full text-sm font-medium text-plum">{state.error.message}</p> : null}
     </form>
   );
 }

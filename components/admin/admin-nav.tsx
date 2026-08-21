@@ -17,7 +17,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { BrandMark } from "@/components/brand-mark";
 import {
   Sidebar,
   SidebarContent,
@@ -129,8 +128,7 @@ export function AdminNav({
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton size="lg" render={<Link href={homeHref} />}>
-                  <BrandMark className="size-7 shrink-0 text-xs" />
-                  <span className="font-mono text-sm font-semibold tracking-wide">TFT</span>
+                  <span className="font-display text-lg font-semibold text-ink">TFT</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -164,7 +162,7 @@ export function AdminNav({
               <Link
                 href={pathname}
                 locale={otherLocale}
-                className="shrink-0 rounded-full border border-sidebar-border px-3 py-1.5 text-xs font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+                className="shrink-0 rounded-xs border border-sidebar-border px-3 py-1.5 text-xs font-medium tracking-[0.04em] text-sidebar-foreground uppercase transition-colors hover:bg-ink hover:text-paper"
               >
                 {localeLabel}
               </Link>
@@ -190,8 +188,7 @@ export function AdminNav({
                 tablet this admin is actually operated from. */}
             <SidebarTrigger className="size-11" />
             <Link href={homeHref} className="flex items-center gap-2 md:hidden">
-              <BrandMark className="size-6 text-xs" />
-              <span className="font-mono text-sm font-semibold tracking-wide text-ink">TFT</span>
+              <span className="font-display text-lg font-semibold text-ink">TFT</span>
             </Link>
           </header>
           <div className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 print:p-0">

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CircleCheck, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
@@ -78,10 +78,11 @@ export default async function StaffAccessPage({
             <div>
               <dt className="text-xs text-ink-soft">{tUsers("tableStatus")}</dt>
               <dd className="mt-0.5 flex items-center gap-1.5 font-medium text-ink">
-                <span
-                  className={staff.isActive ? "size-2 rounded-full bg-green" : "size-2 rounded-full bg-red"}
-                  aria-hidden="true"
-                />
+                {staff.isActive ? (
+                  <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" />
+                ) : (
+                  <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+                )}
                 {staff.isActive ? tUsers("statusActive") : tUsers("statusInactive")}
               </dd>
             </div>
