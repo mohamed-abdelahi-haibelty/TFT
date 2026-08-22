@@ -157,19 +157,6 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
     : "";
   const whatsappUrl = confirmed ? buildWhatsAppUrl(whatsappNumber, whatsappMessage) : null;
 
-  // Automatic redirect (task 11) — a short delay lets the confirmation
-  // screen paint first, so a customer whose WhatsApp app takes over the
-  // screen still saw their order code before it did. The manual button
-  // below is not just a fallback for when this fails; it stays live so the
-  // customer can trigger it again after navigating back.
-  useEffect(() => {
-    if (!whatsappUrl) return;
-    const timer = setTimeout(() => {
-      window.location.href = whatsappUrl;
-    }, 700);
-    return () => clearTimeout(timer);
-  }, [whatsappUrl]);
-
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
     setFieldErrors((current) => ({ ...current, [key]: undefined }));
@@ -314,11 +301,12 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
               <>
                 <a
                   href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="mt-5 flex h-12 w-full items-center justify-center rounded-[2px] bg-ink text-xs font-semibold tracking-[0.05em] text-paper uppercase transition-colors hover:bg-[oklch(0.29_0.012_59.14)]"
                 >
                   {t("confirmation.whatsappCta")}
                 </a>
-                <p className="mt-2 text-xs text-ink-soft">{t("confirmation.whatsappHint")}</p>
               </>
             ) : (
               /* Without a configured number the product's whole mechanism
@@ -625,9 +613,6 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
             </div>
           )}
 
-          {/* The moment of commitment: the next thing that happens is the
-              browser handing the customer to WhatsApp. Saying so beforehand
-              is the difference between a handoff and an app hijack. */}
           <div>
             <button
               type="submit"

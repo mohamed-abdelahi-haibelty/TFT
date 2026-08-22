@@ -150,7 +150,7 @@
       "deliveryBus": "Votre commande partira par bus ; vous la récupérerez à la gare routière.",
       "submit": "Confirmer la commande",
       "submitting": "Envoi en cours…",
-      "reassurance": "Aucun paiement maintenant. Après confirmation, WhatsApp s’ouvre avec votre commande prête à envoyer."
+      "reassurance": "Aucun paiement maintenant. Après confirmation, vous gardez votre numéro de commande et pouvez l’envoyer sur WhatsApp quand vous voulez."
     },
     "summary": {
       "title": "Résumé de la commande",
@@ -173,7 +173,6 @@
       "nextStepsTitle": "Et maintenant ?",
       "nextStepsBody": "Ouvrez WhatsApp pour envoyer votre commande, puis envoyez une capture d'écran du paiement via Bankily, Masrvi ou Sedad dans la même conversation. Nous confirmerons votre commande dès réception du paiement.",
       "whatsappCta": "Ouvrir WhatsApp",
-      "whatsappHint": "Si WhatsApp ne s'ouvre pas automatiquement, appuyez sur le bouton ci-dessus.",
       "whatsappUnavailable": "Le numéro WhatsApp n’est pas encore disponible. Copiez le message de votre commande et envoyez-le-nous, ou gardez votre numéro de commande : nous vous contacterons.",
       "backToShop": "Continuer mes achats",
       "saveCode": "Notez ce numéro. Il vous servira, avec votre téléphone, à suivre votre commande.",
