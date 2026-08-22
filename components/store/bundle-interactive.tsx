@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Gift, Minus, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Gift, Minus, Plus, ZoomIn } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BundleAvailabilityBadge } from "@/components/store/bundle-availability-badge";
+import { ImageLightbox } from "@/components/store/image-lightbox";
 import { PromoCountdown } from "@/components/store/promo-countdown";
 import { useCartDrawer } from "@/components/store/cart-drawer-context";
 import { addToCart } from "@/src/lib/cart";
@@ -53,9 +54,11 @@ export function BundleInteractive({
 }: BundleInteractiveProps) {
   const t = useTranslations("box");
   const tBadges = useTranslations("store.badges");
+  const tCommon = useTranslations("common");
   const { open } = useCartDrawer();
 
   const [imageIndex, setImageIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [qty, setQty] = useState(1);
   const [confirmed, setConfirmed] = useState(false);
   // Same client-side promo-expiry guard as `product-interactive.tsx`: the
@@ -126,18 +129,31 @@ export function BundleInteractive({
           onTouchEnd={handleTouchEnd}
         >
           {activeImage ? (
-            // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform
-            <img
-              key={activeImage}
-              src={buildCloudinaryUrl(activeImage, "gallery")}
-              srcSet={buildCloudinarySrcSet(activeImage, ["card", "gallery", "zoom"])}
-              sizes="(min-width: 1024px) 320px, 90vw"
-              width={800}
-              height={800}
-              fetchPriority="high"
-              alt={t("imageAlt", { name })}
-              className="size-full object-contain mix-blend-multiply"
-            />
+            <button
+              type="button"
+              onClick={() => setLightboxOpen(true)}
+              aria-label={t("zoomImage")}
+              className="group/zoom flex size-full touch-manipulation items-center justify-center"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform */}
+              <img
+                key={activeImage}
+                src={buildCloudinaryUrl(activeImage, "gallery")}
+                srcSet={buildCloudinarySrcSet(activeImage, ["card", "gallery", "zoom"])}
+                sizes="(min-width: 1024px) 320px, 90vw"
+                width={800}
+                height={800}
+                fetchPriority="high"
+                alt={t("imageAlt", { name })}
+                className="size-full cursor-zoom-in object-contain mix-blend-multiply"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute end-2 bottom-2 flex size-9 items-center justify-center border border-ink bg-background text-ink transition-colors group-hover/zoom:bg-ink group-hover/zoom:text-paper"
+              >
+                <ZoomIn className="size-4" aria-hidden="true" />
+              </span>
+            </button>
           ) : (
             <Gift className="size-14 text-ink-soft" aria-hidden="true" />
           )}
@@ -268,6 +284,19 @@ export function BundleInteractive({
           <p className="mt-3 text-xs leading-relaxed text-ink-soft">{t("addReassurance")}</p>
         )}
       </div>
+
+      {lightboxOpen && (
+        <ImageLightbox
+          images={images}
+          index={imageIndex}
+          alt={t("imageAlt", { name })}
+          closeLabel={tCommon("close")}
+          previousLabel={t("previousImage")}
+          nextLabel={t("nextImage")}
+          onIndexChange={showImage}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 }

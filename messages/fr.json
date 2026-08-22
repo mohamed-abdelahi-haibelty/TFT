@@ -78,6 +78,7 @@
     "nextImage": "Image suivante",
     "thumbnailLabel": "Voir l'image {index}",
     "imageAlt": "Image de {name}",
+    "zoomImage": "Agrandir l'image",
     "addReassurance": "Aucun paiement maintenant — vous confirmez sur WhatsApp. Retrait au magasin à Nouadhibou ou par bus vers Nouakchott.",
     "maxQtyHint": "Quantité maximale : {max}",
     "askTitle": "Une question sur ce produit ?",
@@ -110,6 +111,7 @@
     "nextImage": "Image suivante",
     "thumbnailLabel": "Voir l'image {index}",
     "imageAlt": "Image de {name}",
+    "zoomImage": "Agrandir l'image",
     "addReassurance": "Aucun paiement maintenant — vous confirmez sur WhatsApp. Retrait au magasin à Nouadhibou ou par bus vers Nouakchott.",
     "maxQtyHint": "Quantité maximale : {max}"
   },
