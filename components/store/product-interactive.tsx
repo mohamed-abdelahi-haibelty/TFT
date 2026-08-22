@@ -180,20 +180,23 @@ export function ProductInteractive({
     // dead column under the buy box. Bounding the gallery and letting the
     // panel travel with the scroll turns that gap into headroom.
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start lg:gap-16">
-      {/* Gallery */}
-      <div className="flex flex-col gap-4">
+      {/* Gallery. `min-w-0`: this column is a CSS Grid item with no explicit
+          track size below `lg` (only `lg:grid-cols-2` is set), so its
+          implicit column defaulted to `min-width: auto` — Safari/WebKit was
+          sizing that to the gallery img's max-content width (its
+          `width={800}` attribute), overflowing the grid track and bleeding
+          the whole gallery off-screen on real iPhone Safari. `min-w-0`
+          overrides the auto-minimum so the track shrinks to the grid's
+          actual available inline size instead — confirmed against real
+          WebKit (Playwright's webkit engine), not just Chromium. */}
+      <div className="flex min-w-0 flex-col gap-4">
         <div
           className="relative flex aspect-4/5 max-h-[55vh] touch-manipulation items-center justify-center border border-border p-8 lg:max-h-[68vh]"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           {activeImage ? (
-            <button
-              type="button"
-              onClick={() => setLightboxOpen(true)}
-              aria-label={t("zoomImage")}
-              className="group/zoom flex size-full touch-manipulation items-center justify-center"
-            >
+            <div className="relative size-full">
               {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform */}
               <img
                 key={activeImage}
@@ -204,15 +207,22 @@ export function ProductInteractive({
                 height={800}
                 fetchPriority="high"
                 alt={t("imageAlt", { name })}
-                className="size-full cursor-zoom-in object-contain mix-blend-multiply"
+                className="size-full object-contain mix-blend-multiply"
               />
-              <span
-                aria-hidden="true"
-                className="absolute end-2 bottom-2 flex size-9 items-center justify-center border border-ink bg-background text-ink transition-colors group-hover/zoom:bg-ink group-hover/zoom:text-paper"
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(true)}
+                aria-label={t("zoomImage")}
+                className="group/zoom absolute inset-0 cursor-zoom-in touch-manipulation"
               >
-                <ZoomIn className="size-4" aria-hidden="true" />
-              </span>
-            </button>
+                <span
+                  aria-hidden="true"
+                  className="absolute end-2 bottom-2 flex size-9 items-center justify-center border border-ink bg-background text-ink transition-colors group-hover/zoom:bg-ink group-hover/zoom:text-paper"
+                >
+                  <ZoomIn className="size-4" aria-hidden="true" />
+                </span>
+              </button>
+            </div>
           ) : (
             <Package className="size-16 text-ink-soft" aria-hidden="true" />
           )}
