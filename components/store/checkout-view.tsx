@@ -403,8 +403,21 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
   }
 
   if (cart.length === 0) {
+    // A failed submit that removed every unavailable line (the `CONFLICT`
+    // branch in `handleSubmit`) lands here too, since it empties the cart
+    // as a side effect — this used to render the same generic "cart is
+    // empty, go browse" screen as a customer who never added anything,
+    // with the real reason (`formError`) set but never shown. A customer
+    // whose order silently vanished with no explanation is a lost order;
+    // this branch now leads with why, when there is a why.
     return (
       <div className="mx-auto flex min-h-[70vh] max-w-2xl flex-col items-center justify-center px-4 py-10 text-center sm:px-6 sm:py-14">
+        {formError ? (
+          <p role="alert" aria-live="assertive" className="mb-6 flex items-start gap-2 border border-plum p-3.5 text-start text-sm font-medium text-plum">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>{formError}</span>
+          </p>
+        ) : null}
         <ShoppingBag className="mx-auto size-10 text-ink-soft" aria-hidden="true" />
         <h1 className="mt-4 font-display text-2xl font-medium text-ink">{t("emptyTitle")}</h1>
         <p className="mt-2 text-sm text-ink-soft">{t("emptyBody")}</p>
