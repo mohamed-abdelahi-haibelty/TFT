@@ -4,12 +4,12 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { getLocale } from "next-intl/server";
 import type { ServiceResult } from "@/src/lib/errors";
 import { currentMonthKey, dashboardMonthTag } from "@/src/services/dashboard";
-import { completeSale, resolvePosScan, type CompleteSaleResult, type PosScanResult } from "@/src/services/pos";
+import { completeSale, resolvePosItem, type CompleteSaleResult, type PosLookupResult } from "@/src/services/pos";
 
-/** Called directly from client handlers (a scanner keystroke, a quick-pick tap, a manual-search pick) — not form-bound, since it fires on events that aren't form submissions. */
-export async function resolvePosScanAction(sku: string): Promise<ServiceResult<PosScanResult>> {
+/** Called directly from client handlers (a quick-pick tap, a manual-search pick) — not form-bound, since it fires on events that aren't form submissions. */
+export async function resolvePosItemAction(sku: string): Promise<ServiceResult<PosLookupResult>> {
   const locale = await getLocale();
-  return resolvePosScan(sku, locale);
+  return resolvePosItem(sku, locale);
 }
 
 export type CompleteSalePayload = {
@@ -26,7 +26,7 @@ export type CompleteSalePayload = {
     nameSnapshot: string;
     unitPrice: number;
     qty: number;
-    reason: "wrong_scan" | "changed_mind";
+    reason: "added_by_mistake" | "changed_mind";
   }[];
 };
 

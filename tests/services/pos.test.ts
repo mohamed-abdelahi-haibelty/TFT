@@ -13,7 +13,7 @@ import {
   stockMovements,
   users,
 } from "@/src/db/schema";
-import { completeSaleCore, resolvePosScanCore, type PosMessages } from "@/src/services/pos";
+import { completeSaleCore, resolvePosItemCore, type PosMessages } from "@/src/services/pos";
 import { voidOrderCore, type OrderAdminMessages } from "@/src/services/orders";
 
 const posMessages: PosMessages = {
@@ -33,7 +33,7 @@ const orderAdminMessages: OrderAdminMessages = {
   invalidInput: "invalid-input",
 };
 
-describe("pos service — resolvePosScanCore / completeSaleCore / voidOrderCore", () => {
+describe("pos service — resolvePosItemCore / completeSaleCore / voidOrderCore", () => {
   let actorId: string;
   let categoryId: string;
   let productId: string;
@@ -190,10 +190,10 @@ describe("pos service — resolvePosScanCore / completeSaleCore / voidOrderCore"
     await db.delete(users).where(eq(users.id, actorId));
   });
 
-  describe("resolvePosScanCore", () => {
+  describe("resolvePosItemCore", () => {
     it("resolves a plain product by SKU", async () => {
       const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
-      const result = await resolvePosScanCore(product.sku, "fr", posMessages);
+      const result = await resolvePosItemCore(product.sku, "fr", posMessages);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.data.status).toBe("found");
@@ -205,7 +205,7 @@ describe("pos service — resolvePosScanCore / completeSaleCore / voidOrderCore"
 
     it("resolves a variant by SKU, combining the parent product and variant names", async () => {
       const [variant] = await db.select().from(productVariants).where(eq(productVariants.id, variantId)).limit(1);
-      const result = await resolvePosScanCore(variant.sku, "fr", posMessages);
+      const result = await resolvePosItemCore(variant.sku, "fr", posMessages);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.data.status).toBe("found");
@@ -217,7 +217,7 @@ describe("pos service — resolvePosScanCore / completeSaleCore / voidOrderCore"
 
     it("resolves a bundle by SKU", async () => {
       const [bundle] = await db.select().from(bundles).where(eq(bundles.id, bundleId)).limit(1);
-      const result = await resolvePosScanCore(bundle.sku, "fr", posMessages);
+      const result = await resolvePosItemCore(bundle.sku, "fr", posMessages);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.data.status).toBe("found");
@@ -227,7 +227,7 @@ describe("pos service — resolvePosScanCore / completeSaleCore / voidOrderCore"
     });
 
     it("returns not_found for an unknown SKU", async () => {
-      const result = await resolvePosScanCore("NO-SUCH-SKU", "fr", posMessages);
+      const result = await resolvePosItemCore("NO-SUCH-SKU", "fr", posMessages);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.data.status).toBe("not_found");
@@ -235,7 +235,7 @@ describe("pos service — resolvePosScanCore / completeSaleCore / voidOrderCore"
 
     it("returns inactive for a deactivated product", async () => {
       const [product] = await db.select().from(products).where(eq(products.id, inactiveProductId)).limit(1);
-      const result = await resolvePosScanCore(product.sku, "fr", posMessages);
+      const result = await resolvePosItemCore(product.sku, "fr", posMessages);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.data.status).toBe("inactive");
@@ -309,7 +309,7 @@ describe("pos service — resolvePosScanCore / completeSaleCore / voidOrderCore"
           locale: "fr",
           paymentMethod: "cash",
           lines: [{ kind: "product", productId, qty: 1, overridden: false }],
-          removedLines: [{ nameSnapshot: "Stylo scanné par erreur", unitPrice: 100, qty: 3, reason: "wrong_scan" }],
+          removedLines: [{ nameSnapshot: "Stylo ajouté par erreur", unitPrice: 100, qty: 3, reason: "added_by_mistake" }],
         },
         actorId,
         posMessages,
@@ -327,8 +327,8 @@ describe("pos service — resolvePosScanCore / completeSaleCore / voidOrderCore"
       const removedEvent = events.find((e) => e.type === "line_removed");
       expect(removedEvent).toBeDefined();
       expect(removedEvent!.payload).toMatchObject({
-        before: { nameSnapshot: "Stylo scanné par erreur", qty: 3 },
-        reason: "wrong_scan",
+        before: { nameSnapshot: "Stylo ajouté par erreur", qty: 3 },
+        reason: "added_by_mistake",
       });
     });
 

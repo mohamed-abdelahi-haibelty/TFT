@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { AlertTriangle, CheckCircle2, CircleAlert, ScanLine, X } from "lucide-react";
+import { AlertTriangle, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
@@ -10,27 +10,15 @@ import { cn } from "@/lib/utils";
 import { localized } from "@/src/lib/locale-text";
 import { Link } from "@/src/i18n/navigation";
 import { adjustStockAction, type AdjustStockState } from "@/src/services/inventory-actions";
-import { resolvePosScanAction } from "@/src/services/pos-actions";
 import type { InventoryItem } from "@/src/services/inventory";
 
 type AdjustMode = "delta" | "absolute";
 const ADJUST_REASONS = ["restock", "correction", "manual_adjust"] as const;
 
-type ScanFeedback =
-  | { type: "found"; name: string; id: number }
-  | { type: "not_found"; sku: string; id: number }
-  | { type: "filtered"; name: string; id: number };
-
 function itemDisplayName(locale: string, item: InventoryItem): string {
   const name = locale === "ar" ? item.nameAr : item.nameFr;
   const variant = locale === "ar" ? item.variantNameAr : item.variantNameFr;
   return variant ? `${name} — ${variant}` : name;
-}
-
-/** A Bluetooth scanner wedges a whole SKU into whatever has focus at machine speed; a human never does. */
-function looksLikeSku(raw: string): boolean {
-  if (raw.length < 6 || raw.length > 40) return false;
-  return raw.includes("-") || /^\d{6,}$/.test(raw);
 }
 
 function StockBadge({ item, t }: { item: InventoryItem; t: ReturnType<typeof useTranslations> }) {
@@ -296,113 +284,9 @@ export function InventoryView({
   const t = useTranslations("admin.inventory");
   const locale = useLocale();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [scanValue, setScanValue] = useState("");
-  const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
 
-  const scanInputRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
   const qtyInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
-  const itemsRef = useRef(items);
-  const scanningRef = useRef(false);
-  const pendingScanRef = useRef<string | null>(null);
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
-
-  function focusScanInput() {
-    scanInputRef.current?.focus({ preventScroll: true });
-  }
-
-  function handleScan(rawSku: string) {
-    const sku = rawSku.trim();
-    if (!sku) return;
-    if (scanningRef.current) {
-      pendingScanRef.current = sku;
-      return;
-    }
-
-    scanningRef.current = true;
-
-    resolvePosScanAction(sku).then((result) => {
-      if (!result.ok || result.data.status !== "found" || result.data.line.kind !== "product" || !result.data.line.productId) {
-        setFeedback({ type: "not_found", sku, id: Date.now() });
-        return;
-      }
-
-      const { productId, variantId } = result.data.line;
-      const key = variantId ? `${productId}:${variantId}` : productId;
-      const item = itemsRef.current.find((candidate) => candidate.key === key);
-      if (!item) {
-        setFeedback({ type: "filtered", name: result.data.line.name, id: Date.now() });
-        return;
-      }
-
-      setExpandedKey(key);
-      setFeedback({ type: "found", name: result.data.line.name, id: Date.now() });
-    }).finally(() => {
-      scanningRef.current = false;
-      focusScanInput();
-      if (pendingScanRef.current) {
-        const next = pendingScanRef.current;
-        pendingScanRef.current = null;
-        handleScan(next);
-      }
-    });
-  }
-
-  const handleScanRef = useRef(handleScan);
-  useEffect(() => {
-    handleScanRef.current = handleScan;
-  });
-
-  useEffect(() => {
-    let buffer = "";
-    let lastKeyTime = 0;
-
-    function onKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      if (target === scanInputRef.current) return;
-
-      if (event.key === "Enter") {
-        if (buffer && looksLikeSku(buffer) && performance.now() - lastKeyTime < 250) {
-          event.preventDefault();
-          const sku = buffer;
-          buffer = "";
-          if (target instanceof HTMLInputElement) {
-            target.value = "";
-            target.dispatchEvent(new Event("input", { bubbles: true }));
-          }
-          handleScanRef.current(sku);
-        } else {
-          buffer = "";
-        }
-        return;
-      }
-
-      if (event.key.length === 1) {
-        const now = performance.now();
-        const gap = now - lastKeyTime;
-        lastKeyTime = now;
-        if (buffer && gap > 60) buffer = "";
-        buffer += event.key;
-      } else {
-        buffer = "";
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  useEffect(() => {
-    focusScanInput();
-  }, []);
-
-  useEffect(() => {
-    if (!feedback) return;
-    const timer = window.setTimeout(() => setFeedback((current) => (current?.id === feedback.id ? null : current)), 3000);
-    return () => window.clearTimeout(timer);
-  }, [feedback]);
 
   useEffect(() => {
     if (!expandedKey) return;
@@ -411,14 +295,6 @@ export function InventoryView({
     const input = qtyInputRefs.current.get(expandedKey);
     input?.focus({ preventScroll: true });
   }, [expandedKey]);
-
-  function onScanKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    const value = scanValue;
-    setScanValue("");
-    handleScan(value);
-  }
 
   const setRowRef = (key: string) => (el: HTMLElement | null) => {
     if (el) rowRefs.current.set(key, el);
@@ -429,72 +305,12 @@ export function InventoryView({
     else qtyInputRefs.current.delete(key);
   };
 
-  const bannerStyles = feedback?.type === "not_found" ? "border-plum text-plum" : "border-ink text-ink";
-
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-ink">{t("title")}</h1>
-          <p className="mt-1 text-sm text-ink-soft">{t("subtitle")}</p>
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-xs border border-border px-3.5 py-1.5 text-xs font-medium text-ink-soft">
-          <ScanLine className="size-4" aria-hidden="true" />
-          {t("scannerHint")}
-        </div>
+      <div>
+        <h1 className="font-heading text-2xl font-bold text-ink">{t("title")}</h1>
+        <p className="mt-1 text-sm text-ink-soft">{t("subtitle")}</p>
       </div>
-
-      <label className="sr-only" htmlFor="inventory-scan-input">
-        {t("scannerLabel")}
-      </label>
-      <input
-        id="inventory-scan-input"
-        ref={scanInputRef}
-        type="text"
-        inputMode="text"
-        autoComplete="off"
-        value={scanValue}
-        onChange={(event) => setScanValue(event.target.value)}
-        onKeyDown={onScanKeyDown}
-        placeholder={t("scannerPlaceholder")}
-        className="sr-only"
-      />
-
-      {feedback ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className={cn("flex flex-wrap items-center gap-3 rounded-lg border p-3.5", bannerStyles)}
-        >
-          {feedback.type === "found" ? (
-            <>
-              <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" />
-              <p className="flex-1 text-sm font-medium">{t("scanFeedbackFound", { name: feedback.name })}</p>
-            </>
-          ) : feedback.type === "filtered" ? (
-            <>
-              <AlertTriangle className="size-5 shrink-0" aria-hidden="true" />
-              <p className="flex-1 text-sm font-medium">{t("scanFeedbackFiltered", { name: feedback.name })}</p>
-              <Link href="/admin/inventory" className="shrink-0 text-sm font-medium underline underline-offset-2">
-                {t("clearFilter")}
-              </Link>
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="size-5 shrink-0" aria-hidden="true" />
-              <p className="flex-1 text-sm font-medium">{t("scanFeedbackNotFound", { sku: feedback.sku })}</p>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => setFeedback(null)}
-            aria-label={t("dismiss")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-xs opacity-70 transition-colors hover:opacity-100"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
 
       <form className="flex flex-wrap items-center gap-3" method="get">
         <input

@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
-import { playScanError, playScanSuccess } from "@/src/lib/pos-sound";
+import { playAddError, playAddSuccess } from "@/src/lib/pos-sound";
 import { useRouter } from "@/src/i18n/navigation";
-import { completeSaleAction, resolvePosScanAction } from "@/src/services/pos-actions";
+import { completeSaleAction, resolvePosItemAction } from "@/src/services/pos-actions";
 import type { PosCategory, PosGridItem, PosResolvedLine } from "@/src/services/pos";
 
 type PaymentMethod = "cash" | "bankily" | "masrvi" | "sedad" | "other";
@@ -21,7 +21,7 @@ const PAYMENT_METHOD_KEYS: Record<PaymentMethod, "paymentCash" | "paymentBankily
   sedad: "paymentSedad",
   other: "paymentOther",
 };
-const REMOVE_REASONS = ["wrong_scan", "changed_mind"] as const;
+const REMOVE_REASONS = ["added_by_mistake", "changed_mind"] as const;
 
 type CartLine = {
   key: string;
@@ -42,7 +42,7 @@ type RemovedLine = { nameSnapshot: string; unitPrice: number; qty: number; reaso
 
 type PendingOverride = PosResolvedLine & { existingKey?: string; targetQty?: number };
 
-type ScanFeedback =
+type SaleFeedback =
   | { type: "success"; name: string; id: number }
   | { type: "not_found"; sku: string; id: number }
   | { type: "inactive"; name: string; id: number }
@@ -290,9 +290,9 @@ function SaleLineRow({
               variant="destructive"
               size="sm"
               className="rounded-xs"
-              onClick={() => onConfirmRemove(line.key, "wrong_scan")}
+              onClick={() => onConfirmRemove(line.key, "added_by_mistake")}
             >
-              {t("removeReasonWrongScan")}
+              {t("removeReasonMistake")}
             </Button>
             <Button
               type="button"
@@ -313,7 +313,7 @@ function SaleLineRow({
   );
 }
 
-export function PosScanView({
+export function PosRegisterView({
   quickPicks,
   catalog,
   categories,
@@ -328,8 +328,8 @@ export function PosScanView({
 
   const [lines, setLines] = useState<CartLine[]>([]);
   const [removedLines, setRemovedLines] = useState<RemovedLine[]>([]);
-  const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
-  const [scanning, setScanning] = useState(false);
+  const [feedback, setFeedback] = useState<SaleFeedback | null>(null);
+  const [resolving, setResolving] = useState(false);
   const [manualQuery, setManualQuery] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | "all">("all");
   const [removingKey, setRemovingKey] = useState<string | null>(null);
@@ -379,7 +379,7 @@ export function PosScanView({
     });
     setSaleSuccess(null);
     setFeedback({ type: "success", name: line.name, id: Date.now() });
-    playScanSuccess();
+    playAddSuccess();
   }
 
   function addOrWarn(line: PosResolvedLine) {
@@ -390,30 +390,31 @@ export function PosScanView({
 
     if (wouldExceed) {
       setFeedback({ type: "stock_warning", pending: { ...line, existingKey: existing?.key }, id: Date.now() });
-      playScanError();
+      playAddError();
       return;
     }
 
     commitAdd(line, existing?.key, false);
   }
 
-  async function handleScan(rawSku: string) {
+  /** Fired by tapping a quick-pick tile or a search result — resolves that item's own SKU and adds it to the cart. */
+  async function handleSelectSku(rawSku: string) {
     const sku = rawSku.trim();
-    if (!sku || scanning) return;
+    if (!sku || resolving) return;
 
-    setScanning(true);
-    const result = await resolvePosScanAction(sku);
-    setScanning(false);
+    setResolving(true);
+    const result = await resolvePosItemAction(sku);
+    setResolving(false);
 
     if (!result.ok || result.data.status === "not_found") {
       setFeedback({ type: "not_found", sku, id: Date.now() });
-      playScanError();
+      playAddError();
       return;
     }
 
     if (result.data.status === "inactive") {
       setFeedback({ type: "inactive", name: result.data.name, id: Date.now() });
-      playScanError();
+      playAddError();
       return;
     }
 
@@ -436,7 +437,7 @@ export function PosScanView({
     setFeedback(null);
   }
 
-  /** Sets a cart line to an exact quantity (bulk-entry or the +/- steppers), warning past available stock the same way a physical scan does. */
+  /** Sets a cart line to an exact quantity (bulk-entry or the +/- steppers), warning past available stock the same way adding a new one does. */
   function setLineQty(key: string, rawQty: number) {
     const line = linesRef.current.find((l) => l.key === key);
     if (!line) return;
@@ -462,7 +463,7 @@ export function PosScanView({
         },
         id: Date.now(),
       });
-      playScanError();
+      playAddError();
       return;
     }
 
@@ -578,9 +579,9 @@ export function PosScanView({
           {feedback.type !== "success" ? <AlertTriangle className="size-5 shrink-0" aria-hidden="true" /> : null}
 
           <p className="flex-1 text-sm font-medium">
-            {feedback.type === "success" ? t("scanFeedbackAdded", { name: feedback.name }) : null}
-            {feedback.type === "not_found" ? t("scanFeedbackNotFound", { sku: feedback.sku }) : null}
-            {feedback.type === "inactive" ? t("scanFeedbackInactive", { name: feedback.name }) : null}
+            {feedback.type === "success" ? t("itemAddedFeedback", { name: feedback.name }) : null}
+            {feedback.type === "not_found" ? t("itemNotFoundFeedback", { sku: feedback.sku }) : null}
+            {feedback.type === "inactive" ? t("itemInactiveFeedback", { name: feedback.name }) : null}
             {feedback.type === "stock_warning" ? (
               <>
                 <span className="block font-semibold">{t("stockWarningTitle")}</span>
@@ -627,7 +628,7 @@ export function PosScanView({
             ) : (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                 {filteredCatalog.map((item) => (
-                  <ProductCard key={item.sku} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} t={t} />
+                  <ProductCard key={item.sku} item={item} disabled={resolving} onPick={(sku) => void handleSelectSku(sku)} t={t} />
                 ))}
               </div>
             )
@@ -639,7 +640,7 @@ export function PosScanView({
               ) : (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   {quickPicks.map((item) => (
-                    <ProductCard key={item.id} item={item} disabled={scanning} onPick={(sku) => void handleScan(sku)} t={t} />
+                    <ProductCard key={item.id} item={item} disabled={resolving} onPick={(sku) => void handleSelectSku(sku)} t={t} />
                   ))}
                 </div>
               )}

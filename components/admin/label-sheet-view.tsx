@@ -291,9 +291,9 @@ export function LabelSheetView({
       ) : (
         // Fixed physical dimensions, matching the per-product route's own
         // `40mm × 30mm`. This grid used to be `repeat(4, 1fr)` — a *fraction of
-        // the printable width* — so a label's size, and with it the Code128
-        // module width, changed with the paper and the margins, and the two
-        // routes printed different-sized labels for the same product.
+        // the printable width* — so a label's size changed with the paper and
+        // the margins, and the two routes printed different-sized labels for
+        // the same product.
         <div
           className="grid justify-start gap-x-[4mm] gap-y-[4mm] pb-16 print:pb-0"
           style={{ gridTemplateColumns: "repeat(auto-fill, 40mm)", gridAutoRows: "30mm" }}

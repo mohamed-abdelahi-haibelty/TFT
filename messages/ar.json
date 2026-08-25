@@ -533,15 +533,6 @@
       "reasonNegativeHint": "سحب كمية يتطلب سببًا مناسبًا («تصحيح» أو «تعديل يدوي»).",
       "adjustSuccess": "تم تحديث المخزون: {name} ← {stock}",
       "viewHistory": "السجل",
-      "scannerLabel": "الماسح",
-      "scannerHint": "امسح الباركود لفتح تعديل هذا العنصر.",
-      "scannerPlaceholder": "رمز المنتج",
-      "scannerActive": "الماسح نشط",
-      "scanning": "جارٍ المسح…",
-      "scanFeedbackFound": "تم العثور على {name}",
-      "scanFeedbackNotFound": "رمز غير معروف أو خارج الجرد: {sku}",
-      "scanFeedbackFiltered": "«{name}» خارج القائمة المصفّاة",
-      "dismiss": "إغلاق",
       "movementsTitle": "حركات المخزون",
       "movementsSubtitle": "السجل الكامل لعمليات الإدخال والسحب والتصحيح على المخزون.",
       "movementsBack": "العودة إلى الجرد",
@@ -664,7 +655,7 @@
           "voided": "أُبطل الطلب (نقطة البيع) — السبب: {reason}",
           "noteAdded": "أُضيفت ملاحظة",
           "removeReason": {
-            "wrong_scan": "خطأ في المسح",
+            "added_by_mistake": "أُضيف بالخطأ",
             "changed_mind": "غيّر الزبون رأيه"
           }
         },
@@ -879,13 +870,13 @@
       "qtyEditLabel": "تعديل الكمية",
       "removeItem": "إزالة",
       "removeReasonPrompt": "سبب الإزالة",
-      "removeReasonWrongScan": "أُضيف بالخطأ",
+      "removeReasonMistake": "أُضيف بالخطأ",
       "removeReasonChangedMind": "غيّر الزبون رأيه",
       "removeCancel": "إلغاء",
       "totalLabel": "المجموع",
-      "scanFeedbackAdded": "أُضيف {name}",
-      "scanFeedbackNotFound": "رمز غير معروف: {sku}",
-      "scanFeedbackInactive": "{name} لم يعد متاحًا للبيع",
+      "itemAddedFeedback": "أُضيف {name}",
+      "itemNotFoundFeedback": "رمز غير معروف: {sku}",
+      "itemInactiveFeedback": "{name} لم يعد متاحًا للبيع",
       "stockWarningTitle": "المخزون غير كافٍ",
       "stockWarningBody": "{name} — المتوفر {available}",
       "stockWarningOverride": "إضافة على أي حال",
@@ -965,7 +956,7 @@
         "pos": {
           "use": {
             "name": "البيع في نقطة البيع",
-            "description": "مسح المنتجات وتسجيل بيع داخل المحل."
+            "description": "اختيار المنتجات وتسجيل بيع داخل المحل."
           },
           "void": {
             "name": "إبطال بيع مسجَّل",

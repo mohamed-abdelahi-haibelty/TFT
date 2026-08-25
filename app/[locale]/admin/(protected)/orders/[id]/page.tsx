@@ -66,7 +66,7 @@ function eventDescription(
       const base = t("events.lineRemoved", { name: before?.nameSnapshot ?? "" });
       // Only a POS sale's buffered removals carry a `reason` (task 14) — a
       // web order's admin-side line removal (task 13) never sets one.
-      const reason = payload.reason === "wrong_scan" || payload.reason === "changed_mind" ? payload.reason : null;
+      const reason = payload.reason === "added_by_mistake" || payload.reason === "changed_mind" ? payload.reason : null;
       return reason ? `${base} — ${t(`events.removeReason.${reason}`)}` : base;
     }
     case "cancelled": {

@@ -2,12 +2,12 @@
 
 import type { ComponentProps, ReactNode } from "react";
 import {
+  CreditCard,
   FolderTree,
   Gift,
   LayoutDashboard,
   LogOut,
   Package,
-  ScanLine,
   Settings,
   ShoppingBag,
   Tag,
@@ -60,7 +60,7 @@ const SECTION_CHROME: Record<
 > = {
   "/admin": { icon: LayoutDashboard, labelKey: "dashboard", matches: (p) => p === "/admin" },
   "/admin/orders": { icon: ShoppingBag, labelKey: "orders", matches: (p) => p.startsWith("/admin/orders") },
-  "/admin/pos": { icon: ScanLine, labelKey: "pos", matches: (p) => p.startsWith("/admin/pos") },
+  "/admin/pos": { icon: CreditCard, labelKey: "pos", matches: (p) => p.startsWith("/admin/pos") },
   "/admin/inventory": { icon: Warehouse, labelKey: "inventory", matches: (p) => p.startsWith("/admin/inventory") },
   "/admin/categories": { icon: FolderTree, labelKey: "categories", matches: (p) => p === "/admin/categories" },
   "/admin/products": { icon: Package, labelKey: "products", matches: (p) => p.startsWith("/admin/products") },

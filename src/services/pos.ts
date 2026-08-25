@@ -29,7 +29,7 @@ import {
 } from "@/src/services/orders";
 
 // ---------------------------------------------------------------------------
-// Task 14 — POS: Scan Mode (in-person counter sales)
+// Task 14 — POS: in-person counter sales
 // ---------------------------------------------------------------------------
 
 export type PosMessages = {
@@ -144,7 +144,7 @@ export async function listPosCategories(locale: string): Promise<ServiceResult<P
 
 // --- Full catalog: the primary browsing/search surface --------------------
 
-/** The whole active catalog (products, variants, bundles), same shape as the quick-pick grid — client-filters this list, same "shop-scale catalog, filter client-side" convention as the counter-sheet (task 06) and order item picker (task 13). Selecting a result re-scans by its SKU, so it's the identical code path as a physical scan. */
+/** The whole active catalog (products, variants, bundles), same shape as the quick-pick grid — client-filters this list, same "shop-scale catalog, filter client-side" convention as the counter-sheet (task 06) and order item picker (task 13). Selecting a result resolves it by SKU, the same code path a quick-pick tap uses. */
 export async function listPosCatalog(locale: string): Promise<ServiceResult<PosGridItem[]>> {
   const auth = await requirePermission("pos.use");
   if (!auth.ok) return auth;
@@ -178,7 +178,7 @@ export async function listPosCatalog(locale: string): Promise<ServiceResult<PosG
     getEffectivePrices(
       [
         ...productRows.map((p): PricingItem => ({ kind: "product", id: p.id, price: p.price, discountPrice: p.discountPrice })),
-        // A variant carries no price of its own — priced via its parent product, same convention `resolvePosScanCore` uses.
+        // A variant carries no price of its own — priced via its parent product, same convention `resolvePosItemCore` uses.
         ...variantRows.map(
           (v): PricingItem => ({ kind: "product", id: v.productId, price: v.productPrice, discountPrice: v.productDiscountPrice }),
         ),
@@ -242,8 +242,8 @@ export async function listPosCatalog(locale: string): Promise<ServiceResult<PosG
   return { ok: true, data: items };
 }
 
-// --- Scan resolution: the one code path for a physical scan, a quick-pick
-// tap, and a manual-search pick alike -------------------------------------
+// --- Item resolution: the one code path for a quick-pick tap and a
+// manual-search pick alike -------------------------------------------------
 
 export type PosResolvedLine = {
   kind: "product" | "bundle";
@@ -259,26 +259,26 @@ export type PosResolvedLine = {
   allowBackorder: boolean;
 };
 
-export type PosScanResult =
+export type PosLookupResult =
   | { status: "found"; line: PosResolvedLine }
   | { status: "not_found" }
   | { status: "inactive"; name: string };
 
-const scanSchema = z.string().trim().min(1).max(64);
+const skuSchema = z.string().trim().min(1).max(64);
 
-export async function resolvePosScan(rawSku: unknown, locale: string): Promise<ServiceResult<PosScanResult>> {
+export async function resolvePosItem(rawSku: unknown, locale: string): Promise<ServiceResult<PosLookupResult>> {
   const auth = await requirePermission("pos.use");
   if (!auth.ok) return auth;
 
-  return resolvePosScanCore(rawSku, locale, await getPosMessages());
+  return resolvePosItemCore(rawSku, locale, await getPosMessages());
 }
 
-export async function resolvePosScanCore(
+export async function resolvePosItemCore(
   rawSku: unknown,
   locale: string,
   messages: PosMessages,
-): Promise<ServiceResult<PosScanResult>> {
-  const parsed = scanSchema.safeParse(rawSku);
+): Promise<ServiceResult<PosLookupResult>> {
+  const parsed = skuSchema.safeParse(rawSku);
   if (!parsed.success) return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
   const sku = parsed.data;
   const now = new Date();
@@ -423,7 +423,7 @@ const removedLineSchema = z.object({
   nameSnapshot: z.string().trim().min(1).max(300),
   unitPrice: z.number().int().min(0),
   qty: z.number().int().min(1).max(99),
-  reason: z.enum(["wrong_scan", "changed_mind"]),
+  reason: z.enum(["added_by_mistake", "changed_mind"]),
 });
 
 const completeSaleSchema = z.object({
@@ -456,7 +456,7 @@ type ResolvedSaleLine = {
 
 /**
  * Non-backorder line short on recorded stock: the physical item exists (it
- * was just scanned at the counter), so an explicit staff override corrects
+ * was just rung up at the counter), so an explicit staff override corrects
  * the count up to exactly what's needed — a `correction` movement, noted as
  * such (task 14: "logged as a `correction` context on the movement note") —
  * before the normal atomic decrement, which is then guaranteed to clear.
@@ -486,7 +486,7 @@ async function decrementOrCorrect(
         orderId,
         actorId,
         "correction",
-        "POS override: recorded stock corrected to match a physically scanned sale",
+        "POS override: recorded stock corrected to match a completed counter sale",
       );
     }
   }

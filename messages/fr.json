@@ -533,15 +533,6 @@
       "reasonNegativeHint": "Une sortie de stock nécessite un motif adapté (« Correction » ou « Ajustement manuel »).",
       "adjustSuccess": "Stock mis à jour : {name} → {stock}",
       "viewHistory": "Historique",
-      "scannerLabel": "Scanner",
-      "scannerHint": "Scannez un code-barres pour ouvrir l'ajustement de cet article.",
-      "scannerPlaceholder": "Référence produit",
-      "scannerActive": "Scanner actif",
-      "scanning": "Scan en cours…",
-      "scanFeedbackFound": "{name} trouvé",
-      "scanFeedbackNotFound": "Référence inconnue ou hors inventaire : {sku}",
-      "scanFeedbackFiltered": "« {name} » est hors de la liste filtrée",
-      "dismiss": "Fermer",
       "movementsTitle": "Mouvements de stock",
       "movementsSubtitle": "Historique complet des entrées, sorties et corrections de stock.",
       "movementsBack": "Retour à l'inventaire",
@@ -664,7 +655,7 @@
           "voided": "Commande annulée (caisse) — motif : {reason}",
           "noteAdded": "Note ajoutée",
           "removeReason": {
-            "wrong_scan": "erreur de scan",
+            "added_by_mistake": "ajouté par erreur",
             "changed_mind": "le client a changé d'avis"
           }
         },
@@ -879,13 +870,13 @@
       "qtyEditLabel": "Modifier la quantité",
       "removeItem": "Retirer",
       "removeReasonPrompt": "Motif du retrait",
-      "removeReasonWrongScan": "Ajouté par erreur",
+      "removeReasonMistake": "Ajouté par erreur",
       "removeReasonChangedMind": "Le client a changé d'avis",
       "removeCancel": "Annuler",
       "totalLabel": "Total",
-      "scanFeedbackAdded": "{name} ajouté",
-      "scanFeedbackNotFound": "Référence inconnue : {sku}",
-      "scanFeedbackInactive": "{name} n'est plus en vente",
+      "itemAddedFeedback": "{name} ajouté",
+      "itemNotFoundFeedback": "Référence inconnue : {sku}",
+      "itemInactiveFeedback": "{name} n'est plus en vente",
       "stockWarningTitle": "Stock insuffisant",
       "stockWarningBody": "{name} — {available} en stock",
       "stockWarningOverride": "Ajouter quand même",
@@ -965,7 +956,7 @@
         "pos": {
           "use": {
             "name": "Encaisser à la caisse",
-            "description": "Scanner des articles et enregistrer une vente en boutique."
+            "description": "Sélectionner des articles et enregistrer une vente en boutique."
           },
           "void": {
             "name": "Annuler une vente encaissée",

@@ -4,8 +4,8 @@ import { useActionState, useEffect, useId, useMemo, useRef, useState } from "rea
 import {
   BarChart3,
   Check,
+  CreditCard,
   Package,
-  ScanLine,
   ShoppingBag,
   Tag,
   Tags,
@@ -28,7 +28,7 @@ import { setStaffPermissionsAction } from "@/src/services/user-actions";
 
 const GROUP_ICONS: Record<PermissionGroupKey, LucideIcon> = {
   orders: ShoppingBag,
-  pos: ScanLine,
+  pos: CreditCard,
   inventory: Warehouse,
   catalog: Package,
   promotions: Tag,

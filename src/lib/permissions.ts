@@ -56,8 +56,9 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = PERMISSIONS.filter(i
  * What each permission cannot work without. Granting a dependent key grants
  * its prerequisites too (`expandPermissions`), because the alternative is an
  * account that can open an order detail page it is not allowed to list, or
- * scan a product it cannot read. The owner ticks one box and gets a
- * coherent account; the editor shows the implied boxes as already ticked.
+ * ring up a product at the register it cannot otherwise look up. The owner
+ * ticks one box and gets a coherent account; the editor shows the implied
+ * boxes as already ticked.
  */
 export const PERMISSION_REQUIRES: Readonly<Record<Permission, readonly Permission[]>> = {
   "catalog.view": [],

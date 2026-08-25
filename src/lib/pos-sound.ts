@@ -1,8 +1,8 @@
 /**
- * Tiny Web Audio beeps for scan feedback (task 14: "audible/visual success
+ * Tiny Web Audio beeps for POS feedback (task 14: "audible/visual success
  * feedback") — synthesized, not an asset file, so there's nothing to load or
  * fail to load. Every call is wrapped defensively: a tablet with audio
- * blocked or an unsupported browser should never break scanning.
+ * blocked or an unsupported browser should never break the register.
  */
 
 let sharedContext: AudioContext | null = null;
@@ -41,11 +41,11 @@ function beep(frequency: number, durationMs: number, startDelayMs = 0): void {
   }
 }
 
-export function playScanSuccess(): void {
+export function playAddSuccess(): void {
   beep(880, 90);
 }
 
-export function playScanError(): void {
+export function playAddError(): void {
   beep(220, 130);
   beep(220, 130, 160);
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
-import { PosScanView } from "@/components/admin/pos-scan-view";
+import { PosRegisterView } from "@/components/admin/pos-register-view";
 import { firstAllowedSection, hasPermission } from "@/src/lib/permissions";
 import { requireUser } from "@/src/services/authz";
 import { listPosCatalog, listPosCategories, listPosQuickPicks } from "@/src/services/pos";
@@ -34,7 +34,7 @@ export default async function AdminPosPage({ params }: { params: Promise<{ local
   ]);
 
   return (
-    <PosScanView
+    <PosRegisterView
       quickPicks={quickPicksResult.ok ? quickPicksResult.data : []}
       catalog={catalogResult.ok ? catalogResult.data : []}
       categories={categoriesResult.ok ? categoriesResult.data : []}
