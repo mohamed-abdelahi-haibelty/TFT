@@ -163,7 +163,7 @@ export function CartDrawer() {
                 <li key={line.key} className="flex gap-4 border-b border-border py-4">
                   <div className="flex size-16 shrink-0 items-center justify-center border border-border p-2">
                     {line.image ? (
-                      <ProductImage publicId={line.image} sizes="64px" />
+                      <ProductImage publicId={line.image} sizes="48px" />
                     ) : (
                       <ShoppingBag className="size-6 text-ink-soft" aria-hidden="true" />
                     )}

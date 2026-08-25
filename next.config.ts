@@ -33,11 +33,16 @@ const nextConfig: NextConfig = {
   images: {
     loader: "custom",
     loaderFile: "./src/lib/cloudinary-image-loader.ts",
-    // Capped at 1600 because that is the largest transform the design defines
-    // (`zoom`); the framework defaults run to 3840, and every width in the
-    // ladder is a width some device will actually ask Cloudinary to render.
-    deviceSizes: [320, 420, 640, 800, 1080, 1600],
-    imageSizes: [96, 120, 200, 256, 400],
+    // Every width here is one some real rendered box actually asks for, and
+    // nothing else. Each distinct width is a separate Cloudinary derivation
+    // and a separate CDN cache entry, so a loose ladder means more cold
+    // first-views, not more precision. Capped at 1600 (the largest transform
+    // the design defines); the framework defaults run to 3840.
+    //
+    // 256 is load-bearing: it is what a 2x-DPR phone picks for a catalog card,
+    // which is why `CLOUDINARY_PREVIEW_WIDTH` reuses it on the detail pages.
+    deviceSizes: [640, 828, 1080, 1600],
+    imageSizes: [128, 192, 256, 384, 512],
   },
 };
 

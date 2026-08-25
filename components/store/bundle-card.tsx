@@ -10,7 +10,7 @@ export function BundleCard({ bundle, name }: { bundle: StorefrontBundleCard; nam
     <Link href={`/boxes/${bundle.slug}`} className="group flex flex-col">
       <div className="mb-4 flex aspect-square items-center justify-center border border-border p-6 transition-colors group-hover:border-ink">
         {bundle.image ? (
-          <ProductImage publicId={bundle.image} sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw" />
+          <ProductImage publicId={bundle.image} sizes="(min-width: 768px) 210px, (min-width: 640px) 22vw, 31vw" />
         ) : (
           <Gift className="size-8 text-ink-soft" aria-hidden="true" />
         )}

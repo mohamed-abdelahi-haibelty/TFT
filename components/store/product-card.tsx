@@ -32,7 +32,7 @@ export async function ProductCard({
     <Link href={`/product/${product.slug}`} className="group flex flex-col">
       <div className="mb-4 flex aspect-square items-center justify-center border border-border p-6 transition-colors group-hover:border-ink">
         {product.image ? (
-          <ProductImage publicId={product.image} sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw" />
+          <ProductImage publicId={product.image} sizes="(min-width: 768px) 210px, (min-width: 640px) 22vw, 31vw" />
         ) : (
           <Package className="size-8 text-ink-soft" aria-hidden="true" />
         )}

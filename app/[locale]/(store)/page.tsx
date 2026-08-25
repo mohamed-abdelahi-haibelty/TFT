@@ -201,7 +201,7 @@ async function HeroImage() {
   // The one image above the fold on the site's most-visited page, and its LCP
   // element — so this is the only storefront photo that preloads rather than
   // lazy-loading.
-  return <ProductImage publicId={heroProduct.image} sizes="(max-width: 768px) 100vw, 45vw" preload />;
+  return <ProductImage publicId={heroProduct.image} sizes="(min-width: 768px) 395px, 79vw" preload />;
 }
 
 async function CategoryRail({ locale }: { locale: string }) {

@@ -99,7 +99,7 @@ function CartLineRow({ line, locale }: { line: CartItem; locale: string }) {
     <li className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
       <div className="flex size-12 shrink-0 items-center justify-center border border-border p-1.5">
         {line.image ? (
-          <ProductImage publicId={line.image} sizes="48px" />
+          <ProductImage publicId={line.image} sizes="36px" />
         ) : (
           <ShoppingBag className="size-5 text-ink-soft" aria-hidden="true" />
         )}

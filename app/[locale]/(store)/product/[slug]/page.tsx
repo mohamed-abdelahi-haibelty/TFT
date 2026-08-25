@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ProductInteractive } from "@/components/store/product-interactive";
-import { DetailSkeleton } from "@/components/store/skeletons";
+import { ProductDetailSkeleton } from "@/components/store/skeletons";
 import { Link } from "@/src/i18n/navigation";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
@@ -58,7 +58,7 @@ export default async function ProductPage({
   // across slugs, which is the whole point of prerendering one. The body
   // component does it inside the boundary, and calls `setRequestLocale` there.
   return (
-    <Suspense fallback={<DetailSkeleton />}>
+    <Suspense fallback={<ProductDetailSkeleton />}>
       <ProductBody params={params} />
     </Suspense>
   );

@@ -212,9 +212,10 @@ export function ProductInteractive({
               <ProductImage
                 key={activeImage}
                 publicId={activeImage}
-                sizes="(min-width: 1024px) 45vw, 90vw"
+                sizes="(min-width: 1024px) 456px, 76vw"
                 alt={t("imageAlt", { name })}
                 preload
+                previewFromGrid
               />
               <button
                 type="button"
@@ -269,7 +270,7 @@ export function ProductInteractive({
                   index === imageIndex ? "border-ink" : "border-border hover:border-ink"
                 }`}
               >
-                <ProductImage publicId={image} sizes="64px" alt={t("imageAlt", { name })} />
+                <ProductImage publicId={image} sizes="48px" alt={t("imageAlt", { name })} />
               </button>
             ))}
           </div>

@@ -50,29 +50,86 @@ export function CatalogResultsSkeleton() {
   );
 }
 
-/** Mirrors the product/box detail layout: gallery plate beside the purchase panel. */
-export function DetailSkeleton() {
+/**
+ * The detail-page skeletons are split per page and mirror their real layout
+ * *exactly*, because a detail page is where a mismatch hurts most: it is one
+ * tall column on a phone, so any difference in the plate's aspect ratio or in
+ * which breakpoint the grid splits at moves everything below it when the real
+ * content arrives.
+ *
+ * The first version of this was one shared skeleton with a square plate and a
+ * `md:grid-cols-2` split. Both detail pages disagreed with it — the product
+ * plate is 4:5, and both pages split at `lg`, not `md` — so every product page
+ * visibly re-flowed on load, and between 768px and 1024px the skeleton showed
+ * two columns where the content had one. If either layout below changes, its
+ * skeleton has to change with it.
+ */
+
+/** The purchase panel: price, a couple of option rows, quantity, CTA. */
+function PurchasePanelSkeleton() {
+  return (
+    <div className="flex flex-col">
+      <Skeleton className="h-9 w-40 rounded-[2px]" />
+      <Skeleton className="mt-3 h-5 w-24 rounded-[2px]" />
+      <div className="mt-8">
+        <Skeleton className="h-3.5 w-20 rounded-[2px]" />
+        <Skeleton className="mt-3 h-5 w-32 rounded-[2px]" />
+      </div>
+      <div className="mt-8 flex items-center gap-4">
+        <Skeleton className="h-3.5 w-16 rounded-[2px]" />
+        <Skeleton className="h-11 w-32 rounded-[2px]" />
+      </div>
+      <Skeleton className="mt-8 h-12 w-full rounded-[2px]" />
+    </div>
+  );
+}
+
+/** Mirrors `app/[locale]/(store)/product/[slug]/page.tsx` + `ProductInteractive`. */
+export function ProductDetailSkeleton() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
       <Skeleton className="mb-4 h-3.5 w-40 rounded-[2px] sm:mb-8" />
-      <Skeleton className="mb-6 h-9 w-2/3 rounded-[2px] sm:mb-10" />
-      <div className="grid gap-10 md:grid-cols-2">
-        <div>
-          <div className="aspect-square border border-border p-6">
+      <Skeleton className="mb-6 h-8 w-2/3 rounded-[2px] sm:mb-10 sm:h-9" />
+
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start lg:gap-16">
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* aspect-4/5 and the max-h caps, not a square — this is the one that
+              was wrong and moved the whole page on load. */}
+          <div className="flex aspect-4/5 max-h-[55vh] items-center justify-center border border-border p-8 lg:max-h-[68vh]">
             <Skeleton className="size-full rounded-[2px]" />
           </div>
-          <div className="mt-4 flex gap-3">
+          <div className="flex gap-3 overflow-x-auto">
             {Array.from({ length: 4 }, (_, index) => (
-              <Skeleton key={index} className="size-20 shrink-0 rounded-[2px]" />
+              <Skeleton key={index} className="size-16 shrink-0 rounded-[2px]" />
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-8 w-32 rounded-[2px]" />
-          <Skeleton className="h-4 w-24 rounded-[2px]" />
-          <Skeleton className="mt-4 h-12 w-full rounded-[2px]" />
-          <Skeleton className="h-12 w-full rounded-[2px]" />
+        <PurchasePanelSkeleton />
+      </div>
+    </div>
+  );
+}
+
+/** Mirrors `app/[locale]/(store)/boxes/[slug]/page.tsx` + `BundleInteractive`. */
+export function BundleDetailSkeleton() {
+  return (
+    // `max-w-4xl`, not `6xl` — the box page is narrower than the product page.
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
+      <Skeleton className="mb-8 h-3.5 w-40 rounded-[2px]" />
+      <Skeleton className="mb-10 h-8 w-2/3 rounded-[2px] sm:h-9" />
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,320px)_1fr] lg:items-start lg:gap-12">
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex aspect-square items-center justify-center border border-border p-6">
+            <Skeleton className="size-full rounded-[2px]" />
+          </div>
+          <div className="flex gap-3 overflow-x-auto">
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="size-14 shrink-0 rounded-[2px]" />
+            ))}
+          </div>
         </div>
+        <PurchasePanelSkeleton />
       </div>
     </div>
   );

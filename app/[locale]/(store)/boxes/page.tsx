@@ -94,7 +94,7 @@ async function BoxLedger({ locale }: { locale: string }) {
             <Link href={`/boxes/${bundle.slug}`} className="group flex items-center gap-5 py-5">
               <div className="flex size-20 shrink-0 items-center justify-center border border-border p-3 transition-colors group-hover:border-ink sm:size-24">
                 {bundle.image ? (
-                  <ProductImage publicId={bundle.image} sizes="(max-width: 640px) 80px, 96px" />
+                  <ProductImage publicId={bundle.image} sizes="(min-width: 640px) 72px, 56px" />
                 ) : (
                   <Gift className="size-7 text-ink-soft" aria-hidden="true" />
                 )}

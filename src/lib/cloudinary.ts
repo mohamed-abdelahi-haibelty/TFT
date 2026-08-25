@@ -84,3 +84,26 @@ export function cloudinaryLoader({
   const q = quality ?? "auto";
   return `https://res.cloudinary.com/${requireCloudName()}/image/upload/c_pad,b_white,w_${width},h_${width},q_${q},f_auto/${src}`;
 }
+
+/**
+ * Width of the low-resolution preview a detail page reuses as its placeholder.
+ *
+ * Must be a member of `images.imageSizes` in next.config.ts, and is chosen to
+ * be the width a 2×-DPR phone already picked for the same photo in the catalog
+ * grid — so tapping a card paints instantly from cache instead of downloading
+ * the photo a second time at a bigger width.
+ */
+export const CLOUDINARY_PREVIEW_WIDTH = 256;
+
+/**
+ * The catalog grid's cached URL for a photo, byte-identical to what
+ * `next/image` asks for.
+ *
+ * It must go through `cloudinaryLoader` rather than `buildCloudinaryUrl`: the
+ * two emit the same transforms in a *different order* (`q_auto,f_auto` vs
+ * `f_auto,q_auto`), which is a different URL, which is a different cache
+ * entry — and a cache miss here defeats the entire point.
+ */
+export function cloudinaryPreviewUrl(publicId: string): string {
+  return cloudinaryLoader({ src: publicId, width: CLOUDINARY_PREVIEW_WIDTH });
+}

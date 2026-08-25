@@ -152,9 +152,10 @@ export function BundleInteractive({
               <ProductImage
                 key={activeImage}
                 publicId={activeImage}
-                sizes="(min-width: 1024px) 320px, 90vw"
+                sizes="(min-width: 1024px) 272px, 79vw"
                 alt={t("imageAlt", { name })}
                 preload
+                previewFromGrid
               />
               <button
                 type="button"
@@ -209,7 +210,7 @@ export function BundleInteractive({
                   index === imageIndex ? "border-ink" : "border-border hover:border-ink"
                 }`}
               >
-                <ProductImage publicId={image} sizes="56px" alt={t("imageAlt", { name })} />
+                <ProductImage publicId={image} sizes="40px" alt={t("imageAlt", { name })} />
               </button>
             ))}
           </div>
