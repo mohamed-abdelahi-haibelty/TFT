@@ -11,7 +11,6 @@ import {
   Settings,
   ShoppingBag,
   Tag,
-  Tags,
   Users,
   Warehouse,
   type LucideIcon,
@@ -66,7 +65,6 @@ const SECTION_CHROME: Record<
   "/admin/products": { icon: Package, labelKey: "products", matches: (p) => p.startsWith("/admin/products") },
   "/admin/bundles": { icon: Gift, labelKey: "bundles", matches: (p) => p.startsWith("/admin/bundles") },
   "/admin/promotions": { icon: Tag, labelKey: "promotions", matches: (p) => p.startsWith("/admin/promotions") },
-  "/admin/labels/sheet": { icon: Tags, labelKey: "labels", matches: (p) => p.startsWith("/admin/labels") },
   "/admin/users": { icon: Users, labelKey: "users", matches: (p) => p.startsWith("/admin/users") },
   "/admin/settings": { icon: Settings, labelKey: "settings", matches: (p) => p === "/admin/settings" },
 };

@@ -26,7 +26,6 @@ export const PERMISSIONS = [
   "pos.void",
   "inventory.view",
   "inventory.adjust",
-  "labels.print",
   "dashboard.view",
   "users.manage",
   "settings.manage",
@@ -72,7 +71,6 @@ export const PERMISSION_REQUIRES: Readonly<Record<Permission, readonly Permissio
   "pos.void": ["pos.use", "orders.view"],
   "inventory.view": [],
   "inventory.adjust": ["inventory.view"],
-  "labels.print": ["catalog.view"],
   "dashboard.view": ["orders.view"],
   "users.manage": [],
   "settings.manage": [],
@@ -85,7 +83,6 @@ export const PERMISSION_GROUPS = [
   { key: "inventory", permissions: ["inventory.view", "inventory.adjust"] },
   { key: "catalog", permissions: ["catalog.view", "catalog.manage", "catalog.pricing"] },
   { key: "promotions", permissions: ["promotions.manage"] },
-  { key: "labels", permissions: ["labels.print"] },
   { key: "dashboard", permissions: ["dashboard.view"] },
 ] as const satisfies readonly { key: string; permissions: readonly Permission[] }[];
 
@@ -106,7 +103,6 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/products", permission: "catalog.view" },
   { href: "/admin/bundles", permission: "catalog.view" },
   { href: "/admin/promotions", permission: "promotions.manage" },
-  { href: "/admin/labels/sheet", permission: "labels.print" },
   { href: "/admin/users", permission: "users.manage" },
   { href: "/admin/settings", permission: "settings.manage" },
 ] as const satisfies readonly { href: string; permission: Permission }[];

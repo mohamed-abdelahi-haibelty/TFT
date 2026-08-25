@@ -84,14 +84,6 @@ export function BundleRowActions({
       >
         {t("edit")}
       </Link>
-      <Link
-        href={`/admin/bundles/${bundleId}/label`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex h-11 items-center rounded-xs border border-border px-4 text-sm font-medium text-ink transition-colors hover:bg-paper"
-      >
-        {t("printLabel")}
-      </Link>
       {isActive ? (
         <Button
           type="button"

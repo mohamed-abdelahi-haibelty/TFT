@@ -88,7 +88,7 @@ describe("normalizeGrantedPermissions", () => {
   });
 
   it("keeps an already-coherent grant unchanged", () => {
-    const granted: Permission[] = ["catalog.view", "labels.print"];
+    const granted: Permission[] = ["catalog.view", "promotions.manage"];
     expect(normalizeGrantedPermissions(granted)).toEqual(granted);
   });
 });

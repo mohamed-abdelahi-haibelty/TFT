@@ -8,7 +8,6 @@ import {
   Package,
   ShoppingBag,
   Tag,
-  Tags,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
@@ -32,7 +31,6 @@ const GROUP_ICONS: Record<PermissionGroupKey, LucideIcon> = {
   inventory: Warehouse,
   catalog: Package,
   promotions: Tag,
-  labels: Tags,
   dashboard: BarChart3,
 };
 

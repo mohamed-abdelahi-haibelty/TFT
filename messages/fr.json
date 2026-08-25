@@ -274,7 +274,6 @@
       "inventory": "Inventaire",
       "orders": "Commandes",
       "promotions": "Promotions",
-      "labels": "Étiquettes",
       "users": "Utilisateurs",
       "signOut": "Se déconnecter",
       "pos": "Caisse",
@@ -372,7 +371,6 @@
       "statusActive": "Actif",
       "statusInactive": "Inactif",
       "edit": "Modifier",
-      "printLabel": "Imprimer l'étiquette",
       "viewStockHistory": "Historique du stock",
       "deactivate": "Désactiver",
       "activate": "Activer",
@@ -452,7 +450,6 @@
       "statusActive": "Active",
       "statusInactive": "Inactive",
       "edit": "Modifier",
-      "printLabel": "Imprimer l'étiquette",
       "deactivate": "Désactiver",
       "activate": "Activer",
       "cancel": "Annuler",
@@ -782,35 +779,6 @@
       "pickerEmpty": "Aucun résultat.",
       "addItem": "Ajouter"
     },
-    "labels": {
-      "sheetTitle": "Impression des étiquettes",
-      "sheetSubtitle": "Choisissez les produits et les boîtes pour imprimer leurs étiquettes de prix.",
-      "title": "Étiquette",
-      "subtitleSingle": "Une étiquette prête à imprimer.",
-      "subtitleVariants": "{count, plural, =0 {Aucune étiquette} one {# étiquette prête à imprimer} other {# étiquettes prêtes à imprimer}}",
-      "backToProduct": "Retour au produit",
-      "copiesLabel": "Nombre de copies",
-      "printAction": "Imprimer",
-      "searchPlaceholder": "Rechercher par nom ou référence",
-      "categoryFilterAll": "Toutes les catégories",
-      "selectedCount": "{count, plural, =0 {Aucun élément sélectionné} one {# élément sélectionné} other {# éléments sélectionnés}}",
-      "selectAllFiltered": "Tout sélectionner",
-      "clearSelection": "Tout désélectionner",
-      "saveStatusSaving": "Enregistrement…",
-      "saveStatusSaved": "Enregistré",
-      "saveStatusError": "Échec de l'enregistrement",
-      "pickerName": "Nom",
-      "pickerSku": "Référence",
-      "pickerPrice": "Prix",
-      "pickerEmpty": "Aucun résultat.",
-      "sheetFooterFallback": "Tous les produits",
-      "searchLabel": "Rechercher",
-      "selectItemAria": "Sélectionner {name} pour impression",
-      "pickerCount": "{count, plural, =0 {Aucun résultat} one {# résultat} other {# résultats}}",
-      "pageCount": "{pages, plural, one {# page} other {# pages}} · {labels} étiquettes",
-      "clearSelectionConfirm": "Désélectionner tous les éléments ?",
-      "labelStockHint": "Étiquettes 40 × 30 mm, 4 par rangée sur A4."
-    },
     "users": {
       "title": "Utilisateurs",
       "subtitle": "Gérez les comptes de l'équipe.",
@@ -949,7 +917,6 @@
         "inventory": "Inventaire",
         "catalog": "Catalogue",
         "promotions": "Promotions",
-        "labels": "Étiquettes",
         "dashboard": "Tableau de bord"
       },
       "items": {
@@ -1005,12 +972,6 @@
           "manage": {
             "name": "Gérer les promotions",
             "description": "Créer, activer et arrêter les remises appliquées automatiquement."
-          }
-        },
-        "labels": {
-          "print": {
-            "name": "Imprimer les étiquettes",
-            "description": "Imprimer les étiquettes code-barres des produits et des boîtes."
           }
         },
         "dashboard": {
@@ -1087,10 +1048,6 @@
     "notFound": "Promotion introuvable.",
     "invalidInput": "Données invalides. Vérifiez les champs et réessayez.",
     "fixedExceedsBase": "Le montant de la remise dépasse le prix de certains articles : {names}"
-  },
-  "labelErrors": {
-    "notFound": "Élément introuvable.",
-    "invalidSelection": "Impossible d'enregistrer la sélection. Réessayez."
   },
   "errors": {
     "title": "Une erreur est survenue",

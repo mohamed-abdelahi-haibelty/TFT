@@ -274,7 +274,6 @@
       "inventory": "الجرد",
       "orders": "الطلبات",
       "promotions": "العروض",
-      "labels": "الملصقات",
       "users": "المستخدمون",
       "signOut": "تسجيل الخروج",
       "pos": "نقطة البيع",
@@ -372,7 +371,6 @@
       "statusActive": "مفعّل",
       "statusInactive": "غير مفعّل",
       "edit": "تعديل",
-      "printLabel": "طباعة الملصق",
       "viewStockHistory": "سجل المخزون",
       "deactivate": "إلغاء التفعيل",
       "activate": "تفعيل",
@@ -452,7 +450,6 @@
       "statusActive": "مفعّل",
       "statusInactive": "غير مفعّل",
       "edit": "تعديل",
-      "printLabel": "طباعة الملصق",
       "deactivate": "إلغاء التفعيل",
       "activate": "تفعيل",
       "cancel": "إلغاء",
@@ -782,35 +779,6 @@
       "pickerEmpty": "لا توجد نتائج.",
       "addItem": "إضافة"
     },
-    "labels": {
-      "sheetTitle": "طباعة الملصقات",
-      "sheetSubtitle": "اختر المنتجات والصناديق لطباعة ملصقات الأسعار الخاصة بها.",
-      "title": "ملصق",
-      "subtitleSingle": "ملصق واحد جاهز للطباعة.",
-      "subtitleVariants": "{count, plural, =0 {لا توجد ملصقات} one {ملصق واحد جاهز للطباعة} two {ملصقان جاهزان للطباعة} few {# ملصقات جاهزة للطباعة} many {# ملصقًا جاهزًا للطباعة} other {# ملصق جاهز للطباعة}}",
-      "backToProduct": "العودة إلى المنتج",
-      "copiesLabel": "عدد النسخ",
-      "printAction": "طباعة",
-      "searchPlaceholder": "ابحث بالاسم أو الرمز",
-      "categoryFilterAll": "كل الفئات",
-      "selectedCount": "{count, plural, =0 {لم يتم اختيار شيء} one {تم اختيار عنصر واحد} two {تم اختيار عنصرين} few {تم اختيار # عناصر} many {تم اختيار # عنصرًا} other {تم اختيار # عنصر}}",
-      "selectAllFiltered": "تحديد كل النتائج",
-      "clearSelection": "إلغاء التحديد",
-      "saveStatusSaving": "جارٍ الحفظ…",
-      "saveStatusSaved": "تم الحفظ",
-      "saveStatusError": "تعذر الحفظ",
-      "pickerName": "الاسم",
-      "pickerSku": "الرمز",
-      "pickerPrice": "السعر",
-      "pickerEmpty": "لا توجد نتائج.",
-      "sheetFooterFallback": "كل المنتجات",
-      "searchLabel": "بحث",
-      "selectItemAria": "اختيار {name} للطباعة",
-      "pickerCount": "{count, plural, =0 {لا توجد نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
-      "pageCount": "{pages, plural, one {صفحة واحدة} two {صفحتان} few {# صفحات} many {# صفحة} other {# صفحة}} · {labels} ملصق",
-      "clearSelectionConfirm": "إلغاء تحديد كل العناصر؟",
-      "labelStockHint": "ملصقات 40 × 30 مم، 4 في الصف على ورق A4."
-    },
     "users": {
       "title": "المستخدمون",
       "subtitle": "إدارة حسابات فريق العمل.",
@@ -949,7 +917,6 @@
         "inventory": "المخزون",
         "catalog": "الكتالوج",
         "promotions": "العروض",
-        "labels": "الملصقات",
         "dashboard": "لوحة التحكم"
       },
       "items": {
@@ -1005,12 +972,6 @@
           "manage": {
             "name": "إدارة العروض",
             "description": "إنشاء التخفيضات التلقائية وتفعيلها وإيقافها."
-          }
-        },
-        "labels": {
-          "print": {
-            "name": "طباعة الملصقات",
-            "description": "طباعة ملصقات الباركود للمنتجات والعلب."
           }
         },
         "dashboard": {
@@ -1087,10 +1048,6 @@
     "notFound": "العرض غير موجود.",
     "invalidInput": "بيانات غير صالحة. تحقق من الحقول وحاول مرة أخرى.",
     "fixedExceedsBase": "مبلغ الخصم أكبر من سعر بعض العناصر: {names}"
-  },
-  "labelErrors": {
-    "notFound": "العنصر غير موجود.",
-    "invalidSelection": "تعذر حفظ التحديد. حاول مرة أخرى."
   },
   "errors": {
     "title": "حدث خطأ ما",

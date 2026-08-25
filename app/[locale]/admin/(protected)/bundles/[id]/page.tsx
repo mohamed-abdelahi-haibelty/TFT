@@ -56,14 +56,6 @@ export default async function EditBundlePage({
             {locale === "ar" ? bundle.nameAr : bundle.nameFr}
           </h1>
         </div>
-        <Link
-          href={`/admin/bundles/${bundle.id}/label`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex h-10 items-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
-        >
-          {t("printLabel")}
-        </Link>
       </div>
 
       <BundleForm

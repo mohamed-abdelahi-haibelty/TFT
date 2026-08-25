@@ -44,14 +44,6 @@ export function ProductRowActions({
         >
           {t("edit")}
         </Link>
-        <Link
-          href={`/admin/products/${productId}/label`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-8 items-center rounded-xs border border-border px-3.5 text-xs font-medium text-ink transition-colors hover:bg-paper"
-        >
-          {t("printLabel")}
-        </Link>
 
         {/* Reactivating is harmless and stays one click. Deactivating is not:
             it also deactivates every box this product is part of, and

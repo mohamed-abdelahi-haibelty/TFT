@@ -57,6 +57,13 @@
       "when": 1787667734717,
       "tag": "0007_familiar_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787674317174,
+      "tag": "0008_majestic_harrier",
+      "breakpoints": true
     }
   ]
 }

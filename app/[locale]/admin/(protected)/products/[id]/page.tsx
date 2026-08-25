@@ -66,14 +66,6 @@ export default async function EditProductPage({
           >
             {t("viewStockHistory")}
           </Link>
-          <Link
-            href={`/admin/products/${product.id}/label`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 inline-flex h-10 items-center rounded-xs border border-border px-5 text-sm font-medium text-ink transition-colors hover:bg-paper"
-          >
-            {t("printLabel")}
-          </Link>
         </div>
       </div>
 
