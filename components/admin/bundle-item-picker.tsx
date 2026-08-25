@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Check, Plus, Search } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { localized } from "@/src/lib/locale-text";
 import { formatMoney } from "@/src/lib/money";
 import type { BundlePickerProduct } from "@/src/services/bundles";
 
@@ -15,6 +16,8 @@ export function BundleItemPicker({
   onAdd: (product: BundlePickerProduct, variantId: string | null) => void;
 }) {
   const t = useTranslations("admin.bundles");
+  // The admin defaults to Arabic; the picker only ever printed French names.
+  const locale = useLocale();
   const [search, setSearch] = useState("");
   const [variantChoice, setVariantChoice] = useState<Record<string, string>>({});
   const [added, setAdded] = useState<Record<string, boolean>>({});
@@ -97,7 +100,7 @@ export function BundleItemPicker({
                       key={product.id}
                       className="border-b border-border transition-colors last:border-0 hover:bg-paper"
                     >
-                      <td className="px-4 py-2.5 text-sm text-ink">{product.nameFr}</td>
+                      <td className="px-4 py-2.5 text-sm text-ink">{localized(locale, product.nameAr, product.nameFr)}</td>
                       <td className="px-4 py-2.5 font-mono text-xs text-ink-soft">{product.sku}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-baseline gap-1">
@@ -128,7 +131,7 @@ export function BundleItemPicker({
                             <SelectTrigger
                               size="md"
                               className="w-40"
-                              aria-label={t("pickerVariantSelect", { name: product.nameFr })}
+                              aria-label={t("pickerVariantSelect", { name: localized(locale, product.nameAr, product.nameFr) })}
                             >
                               <SelectValue placeholder={t("pickerVariantNone")} />
                             </SelectTrigger>
@@ -136,7 +139,7 @@ export function BundleItemPicker({
                               <SelectItem value="">{t("pickerVariantNone")}</SelectItem>
                               {product.variants.map((variant) => (
                                 <SelectItem key={variant.id} value={variant.id}>
-                                  {variant.nameFr}
+                                  {localized(locale, variant.nameAr, variant.nameFr)}
                                 </SelectItem>
                               ))}
                             </SelectContent>

@@ -8,6 +8,7 @@ const messages: InventoryMessages = {
   invalidInput: "invalid-input",
   notFound: "not-found",
   belowZero: "below-zero",
+  stockMoved: "stock-moved",
 };
 
 // `listInventoryItems`/`listStockMovements`/`getInventoryItemName` call

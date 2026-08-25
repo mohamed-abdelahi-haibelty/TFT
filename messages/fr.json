@@ -165,7 +165,10 @@
       "generic": "Impossible de finaliser la commande. Réessayez.",
       "conflictTitle": "Certains articles ne sont plus disponibles",
       "conflictBody": "Votre panier a été mis à jour. Vérifiez-le et réessayez.",
-      "summaryTitle": "Commande non envoyée. Corrigez ce qui suit :"
+      "summaryTitle": "Commande non envoyée. Corrigez ce qui suit :",
+      "nameTooLong": "Le nom est trop long (120 caractères maximum).",
+      "noteTooLong": "La note est trop longue (500 caractères maximum).",
+      "fieldRejected": "Cette valeur n'est pas acceptée. Vérifiez-la et réessayez."
     },
     "confirmation": {
       "title": "Commande reçue",
@@ -178,7 +181,8 @@
       "saveCode": "Notez ce numéro. Il vous servira, avec votre téléphone, à suivre votre commande.",
       "trackCta": "Suivre ma commande",
       "copyCta": "Copier le message de commande",
-      "copied": "Copié"
+      "copied": "Copié",
+      "phoneLabel": "Numéro de suivi"
     }
   },
   "home": {
@@ -231,7 +235,8 @@
       "phoneLabel": "Numéro de téléphone",
       "phoneHint": "8 chiffres commençant par 2, 3 ou 4",
       "submit": "Voir le statut",
-      "searchAgain": "Suivre une autre commande"
+      "searchAgain": "Suivre une autre commande",
+      "submitting": "Recherche…"
     },
     "errors": {
       "notFound": "Aucune commande trouvée avec ce numéro et ce téléphone. Vérifiez vos informations et réessayez.",
@@ -423,7 +428,11 @@
       "delete": "Supprimer",
       "deleteConfirmPrompt": "Supprimer \"{name}\" ? Cette action est irréversible.",
       "deleteSubmitting": "Suppression…",
-      "pricingLocked": "Vous n'avez pas la permission de modifier les prix. Les autres champs restent modifiables."
+      "pricingLocked": "Vous n'avez pas la permission de modifier les prix. Les autres champs restent modifiables.",
+      "deactivateConfirm": "Ce produit disparaîtra de la boutique.",
+      "deactivateConfirmWithBundles": "Ce produit disparaîtra de la boutique, et ces box seront aussi désactivées : {names}. Réactiver le produit ne les rétablira pas.",
+      "deactivateConfirmSubmit": "Confirmer la désactivation",
+      "deactivateConfirmDismiss": "Annuler"
     },
     "bundles": {
       "title": "Boîtes",
@@ -641,7 +650,8 @@
           "searchPlaceholder": "Nom du produit ou référence",
           "itemLabel": "Choisir un article",
           "qtyLabel": "Quantité",
-          "submit": "Ajouter à la commande"
+          "submit": "Ajouter à la commande",
+          "unavailable": "La liste des produits n'a pas pu être chargée. Actualisez la page et réessayez."
         },
         "events": {
           "title": "Historique",
@@ -838,7 +848,10 @@
       "detailBack": "Tous les utilisateurs",
       "detailAccount": "Compte",
       "detailCreated": "Créé le",
-      "notFound": "Cet utilisateur n'existe pas."
+      "notFound": "Cet utilisateur n'existe pas.",
+      "deactivateConfirm": "Les sessions de ce compte seront fermées immédiatement et la connexion sera bloquée.",
+      "deactivateConfirmSubmit": "Confirmer la désactivation",
+      "deactivateConfirmDismiss": "Annuler"
     },
     "imageUploader": {
       "dropzoneTitle": "Glissez des images ici ou cliquez pour choisir",
@@ -893,7 +906,8 @@
       "saleSuccessTitle": "Vente enregistrée",
       "saleSuccessBody": "Commande {code} — {total}",
       "saleSuccessDismiss": "Nouvelle vente",
-      "outOfStock": "Rupture de stock"
+      "outOfStock": "Rupture de stock",
+      "stockWarningNoOverride": "Vous n'avez pas le droit d'ajuster le stock pour conclure cette vente."
     },
     "settings": {
       "title": "Paramètres du magasin",
@@ -1006,6 +1020,11 @@
           }
         }
       }
+    },
+    "loadError": {
+      "title": "Chargement impossible",
+      "description": "Une erreur est survenue pendant la récupération des données. Ce n'est pas une liste vide.",
+      "retry": "Réessayer"
     }
   },
   "orderErrors": {
@@ -1034,7 +1053,9 @@
     "invalidCredentials": "E-mail ou mot de passe incorrect.",
     "priceForbidden": "Vous n'avez pas la permission de modifier les prix. Les autres changements ont été annulés.",
     "invalidPermissions": "Liste de permissions invalide.",
-    "cannotEditAdminPermissions": "Le compte du propriétaire a toujours tous les accès et ne peut pas être limité."
+    "cannotEditAdminPermissions": "Le compte du propriétaire a toujours tous les accès et ne peut pas être limité.",
+    "tooManyAttempts": "Trop de tentatives de connexion. Réessayez dans 15 minutes.",
+    "invalidImageInput": "Données d'image invalides."
   },
   "productErrors": {
     "notFound": "Produit introuvable.",
@@ -1042,12 +1063,14 @@
     "discountTooHigh": "Le prix réduit doit être inférieur au prix normal.",
     "slugTaken": "Ce slug est déjà utilisé.",
     "deleteBlockedByOrders": "Impossible de supprimer le produit car il figure dans des commandes précédentes. Vous pouvez le désactiver à la place.",
-    "deleteBlockedByMovements": "Impossible de supprimer le produit car il possède un historique de stock. Vous pouvez le désactiver à la place."
+    "deleteBlockedByMovements": "Impossible de supprimer le produit car il possède un historique de stock. Vous pouvez le désactiver à la place.",
+    "priceBelowPromo": "Une promotion à montant fixe couvre ce produit pour une valeur égale ou supérieure au nouveau prix. Modifiez d'abord la promotion."
   },
   "inventoryErrors": {
     "invalidInput": "Données invalides. Vérifiez les champs et réessayez.",
     "notFound": "Article introuvable.",
-    "belowZero": "Stock insuffisant : cet article ne peut pas descendre sous zéro."
+    "belowZero": "Stock insuffisant : cet article ne peut pas descendre sous zéro.",
+    "stockMoved": "Le stock a changé pendant la saisie. Actualisez la page et réessayez."
   },
   "categoryErrors": {
     "invalidInput": "Données invalides. Vérifiez les champs et réessayez.",
@@ -1082,6 +1105,7 @@
   "posErrors": {
     "invalidInput": "Données invalides. Réessayez.",
     "itemUnavailable": "Un des articles n'est plus disponible.",
-    "insufficientStock": "Le stock disponible est insuffisant pour l'un des articles."
+    "insufficientStock": "Le stock disponible est insuffisant pour l'un des articles.",
+    "overrideForbidden": "Vous n'avez pas le droit d'ajuster le stock. Demandez au propriétaire de valider la vente."
   }
 }

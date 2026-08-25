@@ -19,10 +19,25 @@ export type EffectivePrice = {
   promo?: { nameAr: string; nameFr: string; endsAt: Date };
 };
 
+/**
+ * The lowest price a promotion may ever produce. A `fixed` promotion is
+ * validated against its covered items' prices when it is saved, but nothing
+ * re-validates it when a product's price is lowered afterwards — so a 500 MRU
+ * discount left standing over an item repriced to 400 used to resolve to 0 and
+ * the shop gave it away. A promotion that would take an item to nothing is
+ * treated as not applying, rather than as a free item.
+ */
+export const MIN_PROMO_PRICE = 1;
+
 /** Pure promo-price math, split out so rounding/floor rules are unit-testable without a database. */
 export function computePromoPrice(kind: "percent" | "fixed", value: number, base: number): number {
   if (kind === "percent") return Math.round((base * (100 - value)) / 100);
   return Math.max(base - value, 0);
+}
+
+/** A promo only applies while it still leaves a real price behind. */
+export function isApplicablePromoPrice(price: number): boolean {
+  return price >= MIN_PROMO_PRICE;
 }
 
 async function activePromosCoveringItem(item: PricingItem, channel: PricingChannel, now: Date) {
@@ -68,6 +83,7 @@ export async function getEffectivePrice(
   if (promos.length > 0) {
     const cheapest = promos.reduce<{ promo: (typeof promos)[number]; price: number } | null>((best, promo) => {
       const price = computePromoPrice(promo.kind, promo.value, base);
+      if (!isApplicablePromoPrice(price)) return best;
       return !best || price < best.price ? { promo, price } : best;
     }, null);
 
@@ -134,6 +150,7 @@ export async function getEffectivePrices(
     const promos = promosByItemId.get(item.id) ?? [];
     const cheapest = promos.reduce<{ promo: (typeof promos)[number]; price: number } | null>((best, promo) => {
       const price = computePromoPrice(promo.kind, promo.value, base);
+      if (!isApplicablePromoPrice(price)) return best;
       return !best || price < best.price ? { promo, price } : best;
     }, null);
 

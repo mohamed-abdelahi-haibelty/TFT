@@ -1,48 +1,62 @@
-import { count } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { db } from "@/src/db/client";
+import { isUniqueViolation } from "@/src/lib/db-errors";
 
 // The `neon-http` driver has no transaction support (see progress-tracker.md),
 // so sequential SKU numbering can't be made atomic with a lock. Instead each
-// insert is retried against a freshly recounted number on a unique-violation
-// — cheap and correct since a collision only ever comes from a concurrent
-// insert that already committed its own number.
+// insert is retried on a unique-violation against a number that is guaranteed
+// to advance every attempt.
+//
+// The sequence is the table's current high-water mark, NOT its row count: a
+// count is blind to gaps, so deleting anything but the last row made every
+// subsequent create collide with an existing SKU forever, and the retry loop —
+// which recomputed the same count each time — could never escape it.
 const MAX_SKU_ATTEMPTS = 5;
 
-function isSkuConstraintViolation(error: unknown, constraint: string): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: unknown }).code === "23505" &&
-    (error as { constraint?: unknown }).constraint === constraint
-  );
-}
-
-async function nextSkuNumber(table: PgTable): Promise<number> {
-  const [{ value }] = await db.select({ value: count() }).from(table);
-  return value + 1;
+export function formatSku(prefix: string, sequence: number): string {
+  return `${prefix}-${String(sequence).padStart(6, "0")}`;
 }
 
 /**
- * Formats a `PREFIX-NNNNNN` SKU from `table`'s current row count and calls
- * `insert` with it, retrying against a freshly recounted number when `insert`
- * throws a unique-violation on `constraint`.
+ * Highest numeric suffix currently issued under `prefix`, + 1. Rows whose SKU
+ * doesn't match `PREFIX-<digits>` (hand-edited, imported) contribute nothing
+ * rather than breaking the cast.
+ */
+async function nextSkuNumber(table: PgTable, column: PgColumn, prefix: string): Promise<number> {
+  const pattern = `^${prefix}-([0-9]+)$`;
+  const [row] = await db
+    .select({ value: sql<number | null>`max(substring(${column} from ${pattern})::int)` })
+    .from(table);
+  return (row?.value ?? 0) + 1;
+}
+
+/**
+ * Formats a `PREFIX-NNNNNN` SKU from `table`'s current high-water mark and
+ * calls `insert` with it, retrying when `insert` throws a unique-violation on
+ * `constraint`. Each retry re-reads the mark and, if it hasn't moved, steps
+ * past its own last candidate — so the same number is never tried twice.
  */
 export async function insertWithUniqueSku<T>(
   table: PgTable,
+  column: PgColumn,
   prefix: string,
   constraint: string,
   insert: (sku: string) => Promise<T>,
 ): Promise<T> {
+  let sequence = await nextSkuNumber(table, column, prefix);
+
   for (let attempt = 0; attempt < MAX_SKU_ATTEMPTS; attempt++) {
-    const sku = `${prefix}-${String(await nextSkuNumber(table)).padStart(6, "0")}`;
     try {
-      return await insert(sku);
+      return await insert(formatSku(prefix, sequence));
     } catch (error) {
-      if (!isSkuConstraintViolation(error, constraint) || attempt === MAX_SKU_ATTEMPTS - 1) {
+      if (!isUniqueViolation(error, constraint) || attempt === MAX_SKU_ATTEMPTS - 1) {
         throw error;
       }
+      const rechecked = await nextSkuNumber(table, column, prefix);
+      sequence = Math.max(rechecked, sequence + 1);
     }
   }
+
   throw new Error("Could not assign a unique SKU");
 }

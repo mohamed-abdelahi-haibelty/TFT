@@ -20,6 +20,7 @@ const posMessages: PosMessages = {
   invalidInput: "invalid-input",
   itemUnavailable: "item-unavailable",
   insufficientStock: "insufficient-stock",
+  overrideForbidden: "override-forbidden",
 };
 
 const orderAdminMessages: OrderAdminMessages = {

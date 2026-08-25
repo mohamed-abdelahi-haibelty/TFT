@@ -9,7 +9,7 @@ import { requirePermission } from "@/src/services/authz";
 const MONTH_KEY_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function currentMonthKey(now: Date = new Date()): string {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 /** Falls back to the current month for a missing or malformed `?month=` value — never throws on a crafted query string. */
@@ -17,9 +17,15 @@ export function normalizeMonthKey(input: string | undefined, now: Date = new Dat
   return input && MONTH_KEY_RE.test(input) ? input : currentMonthKey(now);
 }
 
+/**
+ * UTC month boundaries. These were the server's *local* calendar while order
+ * codes (`order-code.ts`) and the list date filters were UTC, so on any
+ * non-UTC deployment the dashboard's "this month" and the order codes stamped
+ * `TFT-YYMM` disagreed about where the month started.
+ */
 function monthRange(monthKey: string): { start: Date; end: Date } {
   const [year, month] = monthKey.split("-").map(Number);
-  return { start: new Date(year, month - 1, 1), end: new Date(year, month, 1) };
+  return { start: new Date(Date.UTC(year, month - 1, 1)), end: new Date(Date.UTC(year, month, 1)) };
 }
 
 /** Cache tag scoped to one month — order mutations only revalidate the current month's tag (see order-actions.ts / pos-actions.ts), leaving historical months' cached numbers untouched. */

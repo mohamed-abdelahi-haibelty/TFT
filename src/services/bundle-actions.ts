@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getLocale } from "next-intl/server";
 import type { ServiceResult } from "@/src/lib/errors";
+import { readJsonArray } from "@/src/lib/form-data";
 import { createBundle, deleteBundle, toggleBundleActive, updateBundle } from "@/src/services/bundles";
 
 async function revalidateBundles(bundleId?: string) {
@@ -22,8 +23,8 @@ function readBundleInput(formData: FormData) {
     price: Number(formData.get("price")),
     isActive: formData.get("isActive") === "on",
     slug: formData.get("slug"),
-    images: JSON.parse(String(formData.get("images") || "[]")),
-    items: JSON.parse(String(formData.get("items") || "[]")),
+    images: readJsonArray(formData, "images"),
+    items: readJsonArray(formData, "items"),
   };
 }
 

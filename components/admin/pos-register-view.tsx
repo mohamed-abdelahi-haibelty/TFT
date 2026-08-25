@@ -313,14 +313,48 @@ function SaleLineRow({
   );
 }
 
+/**
+ * The open basket, mirrored to `sessionStorage`. This is a counter register on
+ * a tablet: a stray refresh, or the browser evicting the tab under memory
+ * pressure, used to empty a basket with the customer standing right there and
+ * force the whole sale to be rung up again. The storefront cart already
+ * persists; the register, where losing it costs most, did not.
+ */
+const BASKET_STORAGE_KEY = "tft-pos-basket";
+
+type PersistedBasket = { lines: CartLine[]; removedLines: RemovedLine[] };
+
+function readBasket(): PersistedBasket | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(BASKET_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const candidate = parsed as Partial<PersistedBasket>;
+    if (!Array.isArray(candidate.lines)) return null;
+    return { lines: candidate.lines, removedLines: Array.isArray(candidate.removedLines) ? candidate.removedLines : [] };
+  } catch {
+    return null;
+  }
+}
+
 export function PosRegisterView({
   quickPicks,
   catalog,
   categories,
+  canOverrideStock,
 }: {
   quickPicks: PosGridItem[];
   catalog: PosGridItem[];
   categories: PosCategory[];
+  /**
+   * Whether this operator may correct recorded stock upward to complete a
+   * sale. Overriding *is* an inventory write, so it now needs
+   * `inventory.adjust`; the server refuses it regardless, this just stops the
+   * register offering a button that will be rejected.
+   */
+  canOverrideStock: boolean;
 }) {
   const t = useTranslations("admin.pos");
   const tCommon = useTranslations("common");
@@ -339,10 +373,37 @@ export function PosRegisterView({
   const [completeError, setCompleteError] = useState<string | null>(null);
   const [saleSuccess, setSaleSuccess] = useState<{ code: string; total: number } | null>(null);
 
+  // Cleared whenever the basket is emptied or abandoned, so the next sale is
+  // never mistaken for a retry of the last one.
+  const saleKey = useRef<string | null>(null);
+
   const linesRef = useRef<CartLine[]>(lines);
   useEffect(() => {
     linesRef.current = lines;
   }, [lines]);
+
+  // Restore an interrupted basket once, on mount.
+  useEffect(() => {
+    const stored = readBasket();
+    if (!stored || stored.lines.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- rehydrating persisted state on mount is this effect's whole purpose
+    setLines(stored.lines);
+    setRemovedLines(stored.removedLines);
+  }, []);
+
+  // …and mirror every change back, so the restore above has something current
+  // to find. Cleared on a completed sale and on "new sale".
+  useEffect(() => {
+    try {
+      if (lines.length === 0 && removedLines.length === 0) {
+        window.sessionStorage.removeItem(BASKET_STORAGE_KEY);
+      } else {
+        window.sessionStorage.setItem(BASKET_STORAGE_KEY, JSON.stringify({ lines, removedLines }));
+      }
+    } catch {
+      // Blocked or full storage just means no crash recovery this session.
+    }
+  }, [lines, removedLines]);
 
   useEffect(() => {
     if (!feedback || feedback.type === "stock_warning") return;
@@ -506,6 +567,7 @@ export function PosRegisterView({
   }
 
   function startNewSale() {
+    saleKey.current = null;
     setLines([]);
     setRemovedLines([]);
     setFeedback(null);
@@ -518,9 +580,13 @@ export function PosRegisterView({
     if (!paymentMethod || lines.length === 0 || completing) return;
     setCompleting(true);
     setCompleteError(null);
+    // Reused if the cashier retries after a dropped response, so the sale is
+    // recorded once no matter how many times the button is pressed.
+    saleKey.current ??= crypto.randomUUID();
 
     const result = await completeSaleAction({
       paymentMethod,
+      idempotencyKey: saleKey.current,
       lines: lines.map((l) => ({
         kind: l.kind,
         productId: l.productId ?? undefined,
@@ -539,6 +605,7 @@ export function PosRegisterView({
       return;
     }
 
+    saleKey.current = null;
     setSaleSuccess({ code: result.data.code, total: result.data.total });
     setLines([]);
     setRemovedLines([]);
@@ -586,17 +653,20 @@ export function PosRegisterView({
               <>
                 <span className="block font-semibold">{t("stockWarningTitle")}</span>
                 {t("stockWarningBody", { name: feedback.pending.name, available: Math.max(feedback.pending.stockQty ?? 0, 0) })}
+                {!canOverrideStock ? <span className="mt-1 block">{t("stockWarningNoOverride")}</span> : null}
               </>
             ) : null}
           </p>
 
           {feedback.type === "stock_warning" ? (
             <div className="flex gap-2">
-              <Button type="button" size="sm" className="rounded-xs" onClick={confirmOverride}>
-                {t("stockWarningOverride")}
-              </Button>
+              {canOverrideStock ? (
+                <Button type="button" size="sm" className="rounded-xs" onClick={confirmOverride}>
+                  {t("stockWarningOverride")}
+                </Button>
+              ) : null}
               <Button type="button" size="sm" variant="secondary" className="rounded-xs" onClick={dismissFeedback}>
-                {t("stockWarningCancel")}
+                {canOverrideStock ? t("stockWarningCancel") : tCommon("close")}
               </Button>
             </div>
           ) : (

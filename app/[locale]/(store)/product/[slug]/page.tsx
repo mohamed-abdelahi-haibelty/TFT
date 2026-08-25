@@ -112,6 +112,7 @@ export default async function ProductPage({
         allowBackorder={product.allowBackorder}
         basePrice={product.basePrice}
         effectivePrice={product.effectivePrice}
+        postPromoPrice={product.postPromoPrice}
         promo={product.promo ? { endsAt: new Date(product.promo.endsAt).toISOString() } : null}
         whatsappNumber={settings.whatsappNumber}
       />

@@ -101,6 +101,7 @@ export default async function BundlePage({
         images={bundle.images}
         basePrice={bundle.basePrice}
         effectivePrice={bundle.effectivePrice}
+        postPromoPrice={bundle.postPromoPrice}
         promo={bundle.promo ? { endsAt: new Date(bundle.promo.endsAt).toISOString() } : null}
         maxSellable={bundle.maxSellable}
         componentPriceSum={bundle.componentPriceSum}
@@ -117,7 +118,9 @@ export default async function BundlePage({
             const variantName =
               item.variantNameAr || item.variantNameFr ? localized(locale, item.variantNameAr ?? "", item.variantNameFr ?? "") : null;
             return (
-              <li key={`${item.productId}-${variantName ?? ""}`} className="border-b border-border">
+              // `bundle_items.id`: the same product may legitimately appear
+              // twice in one box, which collided on a product-derived key.
+              <li key={item.id} className="border-b border-border">
                 <Link
                   href={`/product/${item.productSlug}`}
                   className="group flex items-center justify-between gap-4 py-4"

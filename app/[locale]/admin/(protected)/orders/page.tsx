@@ -1,5 +1,6 @@
 import { FilterX } from "lucide-react";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { OrderRowActions } from "@/components/admin/order-row-actions";
@@ -11,7 +12,7 @@ import { formatMoney } from "@/src/lib/money";
 import type { OrderStatusValue } from "@/src/lib/order-tracking";
 import { firstAllowedSection, hasPermission } from "@/src/lib/permissions";
 import { requireUser } from "@/src/services/authz";
-import { getOrderStatusCounts, listOrdersAdmin } from "@/src/services/orders";
+import { getOrderStatusCounts, listOrdersAdmin, type OrderListFilters } from "@/src/services/orders";
 
 const STATUS_VALUES: OrderStatusValue[] = [
   "pending",
@@ -55,7 +56,10 @@ export default async function AdminOrdersPage({
   const query = await searchParams;
 
   const auth = await requireUser();
-  if (!auth.ok) return null;
+  // The protected layout already redirects, so this is a belt-and-braces
+  // path — but it has to lead somewhere. Returning `null` rendered an empty
+  // admin shell with no explanation and no way out.
+  if (!auth.ok) redirect(`/${locale}/admin/login`);
 
   if (!hasPermission(auth.data, "orders.view")) {
     return <AdminForbidden backHref={firstAllowedSection(auth.data) ?? "/admin"} />;
@@ -66,9 +70,19 @@ export default async function AdminOrdersPage({
   const city = query.city === "ndb" || query.city === "nkc" || query.city === "other" ? query.city : undefined;
   const page = Math.max(1, Number(query.page) || 1);
 
+  // The badge counts share the list's filters, so they describe the result set
+  // the operator is actually looking at rather than shop-wide totals.
+  const sharedFilters: Omit<OrderListFilters, "status" | "page"> = {
+    source,
+    city,
+    dateFrom: query.from,
+    dateTo: query.to,
+    search: query.q,
+  };
+
   const [ordersResult, countsResult] = await Promise.all([
-    listOrdersAdmin({ status, source, city, dateFrom: query.from, dateTo: query.to, search: query.q, page }),
-    getOrderStatusCounts(),
+    listOrdersAdmin({ ...sharedFilters, status, page }),
+    getOrderStatusCounts(sharedFilters),
   ]);
   const list = ordersResult.ok ? ordersResult.data : null;
   const counts = countsResult.ok ? countsResult.data : null;
@@ -149,6 +163,11 @@ export default async function AdminOrdersPage({
       ) : null}
 
       <form className="flex flex-wrap items-end gap-3" method="get">
+        {/* A GET submit replaces the whole query string, and status lives in
+            the badge links above rather than in this form — so filtering by
+            "pending" and then typing a search silently widened the results
+            back out to every order. */}
+        {status ? <input type="hidden" name="status" value={status} /> : null}
         <input
           type="search"
           name="q"

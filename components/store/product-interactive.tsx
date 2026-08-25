@@ -39,6 +39,14 @@ export type ProductInteractiveProps = {
   allowBackorder: boolean;
   basePrice: number;
   effectivePrice: number;
+  /**
+   * What this item costs once the promo clock runs out. Falling back to
+   * `basePrice` here discarded any standing `discount_price`, so a
+   * permanently-discounted product was quoted at its full list price on its
+   * own detail page — above the price its catalog card had just advertised,
+   * and above the price the server actually charges.
+   */
+  postPromoPrice: number;
   promo: { endsAt: string } | null;
   /** From `getShopSettings()`, not the env var — the owner can change it from Admin → Settings without a redeploy. */
   whatsappNumber: string | null;
@@ -68,6 +76,7 @@ export function ProductInteractive({
   allowBackorder,
   basePrice,
   effectivePrice,
+  postPromoPrice,
   promo,
   whatsappNumber,
 }: ProductInteractiveProps) {
@@ -108,7 +117,7 @@ export function ProductInteractive({
   const disabled = status === "out-of-stock";
   const maxQty = allowBackorder ? BACKORDER_QTY_CAP : stockQty;
 
-  const liveEffectivePrice = promo && !promoExpired ? effectivePrice : basePrice;
+  const liveEffectivePrice = promo && !promoExpired ? effectivePrice : postPromoPrice;
 
   useEffect(() => {
     if (!promo) return;

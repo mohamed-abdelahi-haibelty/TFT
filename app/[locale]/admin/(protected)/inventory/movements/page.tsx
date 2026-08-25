@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/src/i18n/navigation";
 import { firstAllowedSection, hasPermission } from "@/src/lib/permissions";
@@ -67,7 +68,10 @@ export default async function AdminInventoryMovementsPage({
   const reason = MOVEMENT_REASONS.find((value) => value === query.reason);
 
   const auth = await requireUser();
-  if (!auth.ok) return null;
+  // The protected layout already redirects, so this is a belt-and-braces
+  // path — but it has to lead somewhere. Returning `null` rendered an empty
+  // admin shell with no explanation and no way out.
+  if (!auth.ok) redirect(`/${locale}/admin/login`);
 
   if (!hasPermission(auth.data, "inventory.view")) {
     return <AdminForbidden backHref={firstAllowedSection(auth.data) ?? "/admin"} />;

@@ -26,6 +26,8 @@ type SignResponse = {
   apiKey: string;
   cloudName: string;
   folder: string;
+  /** Signed server-side, so Cloudinary rejects anything outside the list even if this client is bypassed. */
+  allowedFormats: string;
 };
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -48,6 +50,15 @@ export function ImageUploader({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xhrRefs = useRef(new Map<string, XMLHttpRequest>());
   const lastEmitted = useRef<string | null>(null);
+  /**
+   * Assets that were already saved against this record when the form opened.
+   * Removing one only drops it from the form — the Cloudinary object is
+   * destroyed by the save itself, once the new image list has actually
+   * committed. Deleting on click destroyed the asset while the database row
+   * still pointed at it, so abandoning the form (or failing validation) left a
+   * live product page showing a broken image, with no way to undo it.
+   */
+  const persistedIds = useRef(new Set(initialPublicIds));
 
   const [items, setItems] = useState<UploadItem[]>(() =>
     initialPublicIds.map((publicId) => ({
@@ -93,6 +104,7 @@ export function ImageUploader({
         form.append("timestamp", String(sign.timestamp));
         form.append("signature", sign.signature);
         form.append("folder", sign.folder);
+        form.append("allowed_formats", sign.allowedFormats);
 
         const publicId = await new Promise<string>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
@@ -184,7 +196,11 @@ export function ImageUploader({
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     if (item.previewUrl.startsWith("blob:")) URL.revokeObjectURL(item.previewUrl);
 
-    if (item.publicId) {
+    // Only assets uploaded during *this* editing session are safe to destroy
+    // now: nothing in the database has ever referenced them, so a discarded
+    // form would otherwise orphan them. Anything that was already saved is
+    // left alone and cleaned up by the save.
+    if (item.publicId && !persistedIds.current.has(item.publicId)) {
       try {
         await fetch("/api/cloudinary/delete", {
           method: "POST",

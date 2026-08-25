@@ -32,7 +32,10 @@ export default async function AdminDashboardPage({
   const query = await searchParams;
 
   const auth = await requireUser();
-  if (!auth.ok) return null;
+  // The protected layout already redirects, so this is a belt-and-braces
+  // path — but it has to lead somewhere. Returning `null` rendered an empty
+  // admin shell with no explanation and no way out.
+  if (!auth.ok) redirect(`/${locale}/admin/login`);
 
   // `/admin` is the dashboard, and the dashboard is revenue. An account
   // without `dashboard.view` lands on the first section it was granted

@@ -1,25 +1,15 @@
+"use client";
+
 import { Ban, Check, CircleAlert } from "lucide-react";
-import { headers } from "next/headers";
-import { getTranslations } from "next-intl/server";
+import { useTranslations } from "next-intl";
+import { useActionState, useMemo } from "react";
 import {
   buildTrackingSteps,
   isTerminalCancelledStatus,
   type TrackingStep,
   type TrackingStepKey,
 } from "@/src/lib/order-tracking";
-import { checkRateLimit } from "@/src/lib/rate-limit";
-import { trackOrder, type TrackOrderResult } from "@/src/services/tracking";
-
-// A shared tracking link gets reloaded far more than a checkout submit
-// does, so this stays generous — same courtesy-limiter posture `orders.ts`
-// documents (the real backstop is the Cloudflare edge rule).
-const RATE_LIMIT = 20;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-
-async function clientIp(): Promise<string> {
-  const headerList = await headers();
-  return headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-}
+import { trackOrderAction } from "@/src/services/tracking-actions";
 
 function TimelineStep({
   step,
@@ -64,7 +54,7 @@ function TimelineStep({
           <span className="sr-only">— {step.reached ? stateLabels.done : stateLabels.pending}</span>
         </p>
         {step.reached && step.reachedAt && (
-          <p className="mt-1 text-xs text-ink-soft">{dateFormatter.format(step.reachedAt)}</p>
+          <p className="mt-1 text-xs text-ink-soft">{dateFormatter.format(new Date(step.reachedAt))}</p>
         )}
         {step.reached && extra}
       </div>
@@ -72,36 +62,27 @@ function TimelineStep({
   );
 }
 
-export async function TrackView({ locale, code, phone }: { locale: string; code?: string; phone?: string }) {
-  const t = await getTranslations("track");
-  const hasQuery = !!code && !!phone;
-  // An empty string means the field was submitted blank; `undefined` means the
-  // visitor simply arrived. The form used to carry `noValidate` while its
-  // inputs declared `required`/`pattern`, so submitting empty disabled every
-  // constraint, reloaded the page, and said nothing at all.
-  const submittedBlank = !hasQuery && (code !== undefined || phone !== undefined);
+/**
+ * The lookup posts through a server action rather than submitting to itself as
+ * a GET — the code/phone pair is the only credential this order has, and a
+ * query string leaks it into history, access logs, and `Referer`. Only the
+ * order code is ever pre-filled from the URL.
+ */
+export function TrackView({ locale, defaultCode }: { locale: string; defaultCode?: string }) {
+  const t = useTranslations("track");
+  const [state, formAction, pending] = useActionState(trackOrderAction, null);
 
-  let result: TrackOrderResult | null = null;
-  let errorMessage: string | null = submittedBlank ? t("errors.missingFields") : null;
+  const result = state?.ok ? state.data : null;
+  const errorMessage = state && !state.ok ? state.error.message : null;
 
-  if (hasQuery) {
-    const ip = await clientIp();
-    if (!checkRateLimit(`track:${ip}`, RATE_LIMIT, RATE_LIMIT_WINDOW_MS)) {
-      errorMessage = t("errors.rateLimited");
-    } else {
-      const lookup = await trackOrder({ code, phone }, locale);
-      if (lookup.ok) result = lookup.data;
-      else errorMessage = lookup.error.message;
-    }
-  }
-
-  const codeDefault = code ?? "";
-  const phoneDefault = phone?.replace(/\D/g, "").slice(-8) ?? "";
-
-  const dateFormatter = new Intl.DateTimeFormat(locale === "ar" ? "ar" : "fr-FR", {
-    dateStyle: "long",
-    numberingSystem: "latn",
-  });
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale === "ar" ? "ar" : "fr-FR", {
+        dateStyle: "long",
+        numberingSystem: "latn",
+      }),
+    [locale],
+  );
 
   const stepLabels: Record<TrackingStepKey, string> = {
     received: t("result.steps.received"),
@@ -114,8 +95,7 @@ export async function TrackView({ locale, code, phone }: { locale: string; code?
   };
 
   const cancelled = result ? isTerminalCancelledStatus(result.status) : false;
-  const steps =
-    result && !cancelled ? buildTrackingSteps(result.delivery, result.status, result.statusDates) : null;
+  const steps = result && !cancelled ? buildTrackingSteps(result.delivery, result.status, result.statusDates) : null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 sm:py-14">
@@ -126,7 +106,7 @@ export async function TrackView({ locale, code, phone }: { locale: string; code?
         <h1 className="font-display text-2xl font-medium text-ink sm:text-3xl">{t("heading")}</h1>
         <p className="mt-2 text-sm text-ink-soft">{t("intro")}</p>
 
-        <form className="mt-8 flex flex-col gap-6">
+        <form action={formAction} className="mt-8 flex flex-col gap-6">
           <div>
             <label htmlFor="track-code" className="text-xs font-semibold tracking-[0.04em] text-ink-soft uppercase">
               {t("form.codeLabel")}
@@ -137,7 +117,7 @@ export async function TrackView({ locale, code, phone }: { locale: string; code?
               type="text"
               required
               maxLength={40}
-              defaultValue={codeDefault}
+              defaultValue={defaultCode ?? ""}
               placeholder={t("form.codePlaceholder")}
               dir="ltr"
               className="mt-2 h-12 w-full rounded-[2px] border border-border bg-transparent px-3.5 font-mono text-base text-ink uppercase outline-none placeholder:normal-case placeholder:text-ink-soft/60 focus:border-ink focus-visible:ring-2 focus-visible:ring-ring/50 md:text-sm"
@@ -161,7 +141,6 @@ export async function TrackView({ locale, code, phone }: { locale: string; code?
                 required
                 pattern="[234][0-9]{7}"
                 maxLength={8}
-                defaultValue={phoneDefault}
                 aria-describedby="track-phone-hint"
                 className="h-full flex-1 bg-transparent px-3.5 font-mono text-base text-ink outline-none md:text-sm"
               />
@@ -173,9 +152,10 @@ export async function TrackView({ locale, code, phone }: { locale: string; code?
 
           <button
             type="submit"
-            className="h-12 w-full rounded-[2px] bg-ink text-xs font-semibold tracking-[0.05em] text-paper uppercase transition-colors hover:bg-[oklch(0.29_0.012_59.14)]"
+            disabled={pending}
+            className="h-12 w-full rounded-[2px] bg-ink text-xs font-semibold tracking-[0.05em] text-paper uppercase transition-colors hover:bg-[oklch(0.29_0.012_59.14)] disabled:cursor-not-allowed disabled:bg-ink/30"
           >
-            {t("form.submit")}
+            {pending ? t("form.submitting") : t("form.submit")}
           </button>
         </form>
 

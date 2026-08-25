@@ -13,10 +13,19 @@ function parseSort(value: string | undefined): CatalogSort {
   return SORTS.includes(value as CatalogSort) ? (value as CatalogSort) : "newest";
 }
 
+/**
+ * `Number.parseInt` stops at the first non-digit, so `?min=12abc` silently
+ * filtered at 12 instead of being treated as the nonsense it is. The upper
+ * bound keeps a crafted value from turning into an unbounded number, and the
+ * whole thing is a cache key besides (see `listCatalogProducts`).
+ */
+const MAX_PRICE_FILTER = 10_000_000;
+
 function parsePositiveInt(value: string | undefined): number | undefined {
   if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return undefined;
+  return Math.min(parsed, MAX_PRICE_FILTER);
 }
 
 /**

@@ -12,11 +12,15 @@ import {
   stockMovements,
   variantImages,
 } from "@/src/db/schema";
+import { destroyCloudinaryAssets } from "@/src/lib/cloudinary-sign";
+import { isUniqueViolation } from "@/src/lib/db-errors";
 import type { ServiceResult } from "@/src/lib/errors";
+import { containsTerm } from "@/src/lib/search";
 import { slugify } from "@/src/lib/slug";
 import { insertWithUniqueSku } from "@/src/lib/sku";
 import { can, requirePermission } from "@/src/services/authz";
 import { deactivateDependentBundlesCore, type DeactivatedBundleRef } from "@/src/services/bundles";
+import { maxFixedDiscountForProduct } from "@/src/services/promotions";
 
 export type ProductListItem = {
   id: string;
@@ -61,6 +65,8 @@ export type ProductMessages = {
   invalidInput: string;
   discountTooHigh: string;
   slugTaken: string;
+  /** A live fixed-value promotion would take this new price to nothing. */
+  priceBelowPromo: string;
 };
 
 const PRODUCT_SELECT = {
@@ -91,8 +97,8 @@ export async function listProducts(filters: {
   if (!auth.ok) return auth;
 
   const conditions = [];
-  if (filters.search) {
-    const term = `%${filters.search.trim()}%`;
+  const term = containsTerm(filters.search);
+  if (term) {
     conditions.push(
       or(ilike(products.nameFr, term), ilike(products.nameAr, term), ilike(products.sku, term)),
     );
@@ -242,6 +248,7 @@ async function insertNewVariants(productId: string, variants: VariantInput[], ac
   for (const variant of newVariants) {
     const created = await insertWithUniqueSku(
       productVariants,
+      productVariants.sku,
       "V",
       "product_variants_sku_unique",
       (sku) =>
@@ -289,6 +296,7 @@ export async function createProduct(input: unknown): Promise<ServiceResult<{ id:
     invalidInput: t("invalidInput"),
     discountTooHigh: t("discountTooHigh"),
     slugTaken: t("slugTaken"),
+    priceBelowPromo: t("priceBelowPromo"),
   });
 }
 
@@ -311,27 +319,39 @@ export async function createProductCore(
     return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
   }
 
-  const created = await insertWithUniqueSku(products, "P", "products_sku_unique", (sku) =>
-    db
-      .insert(products)
-      .values({
-        nameAr: parsed.data.nameAr,
-        nameFr: parsed.data.nameFr,
-        descriptionAr: parsed.data.descriptionAr ?? null,
-        descriptionFr: parsed.data.descriptionFr ?? null,
-        slug,
-        categoryId: parsed.data.categoryId,
-        price: parsed.data.price,
-        discountPrice: parsed.data.discountPrice ?? null,
-        sku,
-        stockQty: parsed.data.stockQty,
-        lowStockThreshold: parsed.data.lowStockThreshold,
-        allowBackorder: parsed.data.allowBackorder,
-        isActive: parsed.data.isActive,
-      })
-      .returning({ id: products.id })
-      .then(([row]) => row),
-  );
+  let created: { id: string };
+  try {
+    created = await insertWithUniqueSku(products, products.sku, "P", "products_sku_unique", (sku) =>
+      db
+        .insert(products)
+        .values({
+          nameAr: parsed.data.nameAr,
+          nameFr: parsed.data.nameFr,
+          descriptionAr: parsed.data.descriptionAr ?? null,
+          descriptionFr: parsed.data.descriptionFr ?? null,
+          slug,
+          categoryId: parsed.data.categoryId,
+          price: parsed.data.price,
+          discountPrice: parsed.data.discountPrice ?? null,
+          sku,
+          stockQty: parsed.data.stockQty,
+          lowStockThreshold: parsed.data.lowStockThreshold,
+          allowBackorder: parsed.data.allowBackorder,
+          isActive: parsed.data.isActive,
+        })
+        .returning({ id: products.id })
+        .then(([row]) => row),
+    );
+  } catch (error) {
+    // `resolveUniqueProductSlug` checks first, but check-then-insert is not
+    // atomic; a concurrent create claiming the same slug used to surface the
+    // raw Postgres 23505 as an unhandled action error instead of the message
+    // this function already prepared for exactly that outcome.
+    if (isUniqueViolation(error, "products_slug_unique")) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
+    }
+    throw error;
+  }
 
   if (parsed.data.images.length) {
     await db
@@ -398,6 +418,7 @@ export async function updateProduct(
     invalidInput: t("invalidInput"),
     discountTooHigh: t("discountTooHigh"),
     slugTaken: t("slugTaken"),
+    priceBelowPromo: t("priceBelowPromo"),
   });
 }
 
@@ -414,6 +435,17 @@ export async function updateProductCore(
 
   if (parsed.data.discountPrice != null && parsed.data.discountPrice >= parsed.data.price) {
     return { ok: false, error: { code: "VALIDATION", message: messages.discountTooHigh } };
+  }
+
+  // A `fixed` promotion is validated against its covered items when *it* is
+  // saved, but nothing re-validated it when a covered product's price moved
+  // afterwards — a 500 MRU discount left standing over an item repriced to 400
+  // resolved to a free product. Pricing floors this at runtime too; refusing
+  // here is what lets the owner see why.
+  const lowestPrice = Math.min(parsed.data.price, parsed.data.discountPrice ?? parsed.data.price);
+  const maxFixedDiscount = await maxFixedDiscountForProduct(id);
+  if (maxFixedDiscount != null && maxFixedDiscount >= lowestPrice) {
+    return { ok: false, error: { code: "CONFLICT", message: messages.priceBelowPromo } };
   }
 
   const slug = await resolveUniqueProductSlug(parsed.data.slug, parsed.data.nameFr, id);
@@ -445,6 +477,20 @@ export async function updateProductCore(
     await deactivateDependentBundlesCore(id);
   }
 
+  // Cloudinary assets are dropped *here*, after the save has committed — not
+  // in the browser the moment someone clicks the remove button. Deleting on
+  // click destroyed the asset while the row still referenced it, so abandoning
+  // the form (or hitting a validation error) left a live product page pointing
+  // at an image that no longer existed.
+  const orphaned: string[] = [];
+
+  const previousImages = await db
+    .select({ publicId: productImages.publicId })
+    .from(productImages)
+    .where(eq(productImages.productId, id));
+  const keptImages = new Set(parsed.data.images);
+  orphaned.push(...previousImages.map((row) => row.publicId).filter((publicId) => !keptImages.has(publicId)));
+
   await db.delete(productImages).where(eq(productImages.productId, id));
   if (parsed.data.images.length) {
     await db
@@ -456,14 +502,27 @@ export async function updateProductCore(
     (v): v is VariantInput & { id: string } => !!v.id,
   );
   for (const variant of existingVariants) {
-    await db
+    // Scoped to this product. `WHERE id = ...` alone let a crafted payload
+    // rename or re-image a variant belonging to a different product.
+    const updated = await db
       .update(productVariants)
       .set({
         nameAr: variant.nameAr,
         nameFr: variant.nameFr,
         colorHex: variant.colorHex ?? null,
       })
-      .where(eq(productVariants.id, variant.id));
+      .where(and(eq(productVariants.id, variant.id), eq(productVariants.productId, id)))
+      .returning({ id: productVariants.id });
+    if (!updated.length) continue;
+
+    const previousVariantImages = await db
+      .select({ publicId: variantImages.publicId })
+      .from(variantImages)
+      .where(eq(variantImages.variantId, variant.id));
+    const keptVariantImages = new Set(variant.images);
+    orphaned.push(
+      ...previousVariantImages.map((row) => row.publicId).filter((publicId) => !keptVariantImages.has(publicId)),
+    );
 
     await db.delete(variantImages).where(eq(variantImages.variantId, variant.id));
     if (variant.images.length) {
@@ -474,6 +533,8 @@ export async function updateProductCore(
   }
 
   await insertNewVariants(id, parsed.data.variants, actorId);
+
+  await destroyCloudinaryAssets(orphaned);
 
   return { ok: true, data: { id } };
 }
@@ -525,8 +586,24 @@ export async function deleteProductCore(
   await deactivateDependentBundlesCore(id);
   await db.delete(bundleItems).where(eq(bundleItems.productId, id));
 
+  // The image rows cascade with the product; the Cloudinary assets they point
+  // at do not, so collect them before the cascade takes the addresses away.
+  const [productImageRows, variantImageRows] = await Promise.all([
+    db.select({ publicId: productImages.publicId }).from(productImages).where(eq(productImages.productId, id)),
+    db
+      .select({ publicId: variantImages.publicId })
+      .from(variantImages)
+      .innerJoin(productVariants, eq(variantImages.variantId, productVariants.id))
+      .where(eq(productVariants.productId, id)),
+  ]);
+
   // productImages / productVariants / promotion_items cascade with the row.
   await db.delete(products).where(eq(products.id, id));
+
+  await destroyCloudinaryAssets([
+    ...productImageRows.map((row) => row.publicId),
+    ...variantImageRows.map((row) => row.publicId),
+  ]);
 
   return { ok: true, data: { id } };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 
@@ -26,6 +26,11 @@ export type ImageLightboxProps = {
  * "the image is the target, the space around it is the exit" convention
  * most native photo viewers use.
  */
+/** The mount check never changes after hydration, so there is nothing to subscribe to. */
+function subscribeToNothing() {
+  return () => {};
+}
+
 export function ImageLightbox({
   images,
   index,
@@ -43,13 +48,12 @@ export function ImageLightbox({
   // live: without the portal, the overlay clipped to a mid-page band and the
   // header/breadcrumb/footer showed through above and below it). `CartDrawer`
   // gets away without one only because the layout mounts it at the root.
-  const [mounted, setMounted] = useState(false);
+  // `useSyncExternalStore` with a `false` server snapshot and a `true` client
+  // one is the mount check without the setState-in-effect: React reads it
+  // during render on the client and never commits a second pass for it.
+  const mounted = useSyncExternalStore(subscribeToNothing, () => true, () => false);
   const touchStartX = useRef<number | null>(null);
   const activeImage = images[index] ?? null;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;

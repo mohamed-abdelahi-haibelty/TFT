@@ -33,12 +33,22 @@ export async function createStaffAction(
   return { ok: true, data: null };
 }
 
-export async function toggleUserActiveAction(userId: string, nextActive: boolean) {
+/**
+ * Returns its result. Deactivating an account also kills its sessions, so
+ * "did that work?" is a security question — and this used to answer it by
+ * showing nothing at all whether it succeeded or failed.
+ */
+export async function toggleUserActiveAction(
+  userId: string,
+  nextActive: boolean,
+  _prev: ServiceResult<null> | null,
+  _formData: FormData,
+): Promise<ServiceResult<null>> {
   const result = nextActive ? await reactivateUser(userId) : await deactivateUser(userId);
+  if (!result.ok) return result;
 
-  if (result.ok) {
-    await revalidateUsersPage();
-  }
+  await revalidateUsersPage();
+  return { ok: true, data: null };
 }
 
 export async function resetPasswordAction(

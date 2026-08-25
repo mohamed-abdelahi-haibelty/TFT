@@ -7,7 +7,12 @@ import { auth } from "@/src/lib/auth";
 import { evaluateSession } from "@/src/services/authz";
 import { createProductCore, updateProductCore } from "@/src/services/products";
 
-const messages = { invalidInput: "invalid", discountTooHigh: "discount-too-high", slugTaken: "slug-taken" };
+const messages = {
+  invalidInput: "invalid",
+  discountTooHigh: "discount-too-high",
+  slugTaken: "slug-taken",
+  priceBelowPromo: "price-below-promo",
+};
 
 describe("products service — createProductCore / updateProductCore", () => {
   let actorId: string;

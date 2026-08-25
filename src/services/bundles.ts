@@ -3,7 +3,10 @@ import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db } from "@/src/db/client";
 import { bundleImages, bundleItems, bundles, categories, orderItems, productVariants, products } from "@/src/db/schema";
+import { destroyCloudinaryAssets } from "@/src/lib/cloudinary-sign";
+import { isUniqueViolation } from "@/src/lib/db-errors";
 import type { ServiceResult } from "@/src/lib/errors";
+import { containsTerm } from "@/src/lib/search";
 import { deriveMaxSellable, deriveLimitingComponent, type AvailabilityComponent, type LimitRef } from "@/src/lib/bundle-availability";
 import { insertWithUniqueSku } from "@/src/lib/sku";
 import { slugify } from "@/src/lib/slug";
@@ -59,7 +62,7 @@ export type BundleMessages = {
   slugTaken: string;
 };
 
-export type DeactivatedBundleRef = { id: string; nameFr: string };
+export type DeactivatedBundleRef = { id: string; nameAr: string; nameFr: string };
 
 const BUNDLE_SELECT = {
   id: bundles.id,
@@ -139,8 +142,8 @@ export async function listBundles(filters: {
   if (!auth.ok) return auth;
 
   const conditions = [];
-  if (filters.search) {
-    const term = `%${filters.search.trim()}%`;
+  const term = containsTerm(filters.search);
+  if (term) {
     conditions.push(or(ilike(bundles.nameFr, term), ilike(bundles.nameAr, term), ilike(bundles.sku, term)));
   }
   if (filters.activeOnly) conditions.push(eq(bundles.isActive, true));
@@ -278,6 +281,35 @@ const bundleBaseSchema = z.object({
   items: z.array(bundleItemInputSchema).min(1).max(50),
 });
 
+/**
+ * A `bundle_items` row names a product and, optionally, one of *that
+ * product's* variants. Zod only checks both are UUIDs, so a crafted payload
+ * could pair product A with product B's variant — availability would then read
+ * B's stock while `loadStockLines` decremented B's variant on a sale of A,
+ * corrupting two products' inventory at once.
+ */
+async function itemsHaveValidParents(items: { productId: string; variantId?: string | null }[]): Promise<boolean> {
+  const productIds = [...new Set(items.map((item) => item.productId))];
+  const variantIds = [...new Set(items.map((item) => item.variantId).filter((id): id is string => !!id))];
+
+  const [productRows, variantRows] = await Promise.all([
+    productIds.length
+      ? db.select({ id: products.id }).from(products).where(inArray(products.id, productIds))
+      : Promise.resolve([]),
+    variantIds.length
+      ? db
+          .select({ id: productVariants.id, productId: productVariants.productId })
+          .from(productVariants)
+          .where(inArray(productVariants.id, variantIds))
+      : Promise.resolve([]),
+  ]);
+
+  if (productRows.length !== productIds.length || variantRows.length !== variantIds.length) return false;
+
+  const parentByVariant = new Map(variantRows.map((row) => [row.id, row.productId]));
+  return items.every((item) => !item.variantId || parentByVariant.get(item.variantId) === item.productId);
+}
+
 async function resolveUniqueBundleSlug(
   requestedSlug: string,
   nameFr: string,
@@ -308,27 +340,40 @@ export async function createBundleCore(
     return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
   }
 
+  if (!(await itemsHaveValidParents(parsed.data.items))) {
+    return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
+  }
+
   const slug = await resolveUniqueBundleSlug(parsed.data.slug, parsed.data.nameFr);
   if (!slug) {
     return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
   }
 
-  const created = await insertWithUniqueSku(bundles, "B", "bundles_sku_unique", (sku) =>
-    db
-      .insert(bundles)
-      .values({
-        nameAr: parsed.data.nameAr,
-        nameFr: parsed.data.nameFr,
-        descriptionAr: parsed.data.descriptionAr ?? null,
-        descriptionFr: parsed.data.descriptionFr ?? null,
-        slug,
-        price: parsed.data.price,
-        sku,
-        isActive: parsed.data.isActive,
-      })
-      .returning({ id: bundles.id })
-      .then(([row]) => row),
-  );
+  let created: { id: string };
+  try {
+    created = await insertWithUniqueSku(bundles, bundles.sku, "B", "bundles_sku_unique", (sku) =>
+      db
+        .insert(bundles)
+        .values({
+          nameAr: parsed.data.nameAr,
+          nameFr: parsed.data.nameFr,
+          descriptionAr: parsed.data.descriptionAr ?? null,
+          descriptionFr: parsed.data.descriptionFr ?? null,
+          slug,
+          price: parsed.data.price,
+          sku,
+          isActive: parsed.data.isActive,
+        })
+        .returning({ id: bundles.id })
+        .then(([row]) => row),
+    );
+  } catch (error) {
+    // Check-then-insert is not atomic; see `createProductCore`.
+    if (isUniqueViolation(error, "bundles_slug_unique")) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
+    }
+    throw error;
+  }
 
   if (parsed.data.images.length) {
     await db
@@ -390,6 +435,10 @@ export async function updateBundleCore(
     return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
   }
 
+  if (!(await itemsHaveValidParents(parsed.data.items))) {
+    return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
+  }
+
   const slug = await resolveUniqueBundleSlug(parsed.data.slug, parsed.data.nameFr, id);
   if (!slug) {
     return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
@@ -407,6 +456,15 @@ export async function updateBundleCore(
       isActive: parsed.data.isActive,
     })
     .where(eq(bundles.id, id));
+
+  // Same rule as `updateProductCore`: the remote asset goes only once the save
+  // has committed, never on the click that removed it from the form.
+  const previousImages = await db
+    .select({ publicId: bundleImages.publicId })
+    .from(bundleImages)
+    .where(eq(bundleImages.bundleId, id));
+  const kept = new Set(parsed.data.images);
+  const orphaned = previousImages.map((row) => row.publicId).filter((publicId) => !kept.has(publicId));
 
   await db.delete(bundleImages).where(eq(bundleImages.bundleId, id));
   if (parsed.data.images.length) {
@@ -427,6 +485,8 @@ export async function updateBundleCore(
       qty: item.qty,
     })),
   );
+
+  await destroyCloudinaryAssets(orphaned);
 
   return { ok: true, data: { id } };
 }
@@ -480,7 +540,16 @@ export async function deleteBundleCore(
     return { ok: false, error: { code: "CONFLICT", message: messages.deleteBlockedByOrders } };
   }
 
+  const imageRows = await db
+    .select({ publicId: bundleImages.publicId })
+    .from(bundleImages)
+    .where(eq(bundleImages.bundleId, id));
+
   await db.delete(bundles).where(eq(bundles.id, id));
+
+  // The rows cascade; the Cloudinary assets behind them do not.
+  await destroyCloudinaryAssets(imageRows.map((row) => row.publicId));
+
   return { ok: true, data: { id } };
 }
 
@@ -492,7 +561,7 @@ export async function deleteBundleCore(
  */
 export async function deactivateDependentBundlesCore(productId: string): Promise<DeactivatedBundleRef[]> {
   const affected = await db
-    .selectDistinct({ id: bundles.id, nameFr: bundles.nameFr })
+    .selectDistinct({ id: bundles.id, nameAr: bundles.nameAr, nameFr: bundles.nameFr })
     .from(bundles)
     .innerJoin(bundleItems, eq(bundleItems.bundleId, bundles.id))
     .where(and(eq(bundleItems.productId, productId), eq(bundles.isActive, true)));
@@ -512,6 +581,34 @@ export async function deactivateDependentBundlesCore(productId: string): Promise
   return affected;
 }
 
+export type BundleDependency = { id: string; nameAr: string; nameFr: string };
+
+/**
+ * Active bundles per component product, for the whole list in one query —
+ * the product list needs it to warn *before* a deactivation, since the
+ * cascade is one-way (`toggleProductActiveCore` never reactivates a bundle).
+ */
+export async function listBundleDependenciesByProduct(): Promise<Map<string, BundleDependency[]>> {
+  const rows = await db
+    .selectDistinct({
+      productId: bundleItems.productId,
+      id: bundles.id,
+      nameAr: bundles.nameAr,
+      nameFr: bundles.nameFr,
+    })
+    .from(bundleItems)
+    .innerJoin(bundles, eq(bundleItems.bundleId, bundles.id))
+    .where(eq(bundles.isActive, true));
+
+  const byProduct = new Map<string, BundleDependency[]>();
+  for (const row of rows) {
+    const list = byProduct.get(row.productId) ?? [];
+    list.push({ id: row.id, nameAr: row.nameAr, nameFr: row.nameFr });
+    byProduct.set(row.productId, list);
+  }
+  return byProduct;
+}
+
 export type BundlePickerVariant = {
   id: string;
   nameAr: string;
@@ -527,6 +624,7 @@ export type BundlePickerProduct = {
   discountPrice: number | null;
   stockQty: number;
   allowBackorder: boolean;
+  categoryNameAr: string;
   categoryNameFr: string;
   variants: BundlePickerVariant[];
 };
@@ -546,6 +644,7 @@ export async function listBundlePickerProducts(): Promise<ServiceResult<BundlePi
       discountPrice: products.discountPrice,
       stockQty: products.stockQty,
       allowBackorder: products.allowBackorder,
+      categoryNameAr: categories.nameAr,
       categoryNameFr: categories.nameFr,
     })
     .from(products)

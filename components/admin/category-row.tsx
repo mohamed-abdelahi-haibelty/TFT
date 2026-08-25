@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { localized } from "@/src/lib/locale-text";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
@@ -24,6 +25,7 @@ export function CategoryRow({
   index: number;
 }) {
   const t = useTranslations("admin.categories");
+  const locale = useLocale();
   const { toast } = useToast();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -165,13 +167,13 @@ export function CategoryRow({
       <td className="px-5 py-4 text-sm font-medium text-ink" dir="rtl">
         {category.nameAr}
       </td>
-      <td className="px-5 py-4 text-sm text-ink">{category.nameFr}</td>
+      <td className="px-5 py-4 text-sm text-ink">{localized(locale, category.nameAr, category.nameFr)}</td>
       <td className="px-5 py-4 font-mono text-sm text-ink-soft">{category.slug}</td>
       <td className="px-5 py-4">
         {confirmingDelete ? (
           <div className="flex flex-col items-start gap-2">
             <p className="text-sm text-ink">
-              {t("deleteConfirmPrompt", { name: category.nameFr })}
+              {t("deleteConfirmPrompt", { name: localized(locale, category.nameAr, category.nameFr) })}
             </p>
             <div className="flex items-center gap-2">
               <form action={deleteFormAction}>

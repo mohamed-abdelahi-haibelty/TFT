@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db } from "@/src/db/client";
@@ -14,12 +14,14 @@ import {
   users,
 } from "@/src/db/schema";
 import { type AvailabilityComponent, deriveMaxSellable } from "@/src/lib/bundle-availability";
+import { isUniqueViolation } from "@/src/lib/db-errors";
 import type { ServiceResult } from "@/src/lib/errors";
 import { localized } from "@/src/lib/locale-text";
 import { insertWithUniqueOrderCode } from "@/src/lib/order-code";
 import type { OrderStatusValue } from "@/src/lib/order-tracking";
 import { normalizeMauritanianPhone } from "@/src/lib/phone";
-import { getEffectivePrice, type PricingChannel } from "@/src/services/pricing";
+import { containsTerm } from "@/src/lib/search";
+import { getEffectivePrice, getEffectivePrices, type PricingChannel, type PricingItem } from "@/src/services/pricing";
 import { requirePermission } from "@/src/services/authz";
 
 const orderItemSchema = z
@@ -44,7 +46,18 @@ const createOrderSchema = z.object({
   // choice the public storefront hands out.
   city: z.enum(["ndb", "nkc"]),
   note: z.string().trim().max(500).optional(),
-  items: z.array(orderItemSchema).min(1).max(50),
+  /** One key per checkout attempt — see `orders.idempotencyKey`. */
+  idempotencyKey: z.uuid().optional(),
+  items: z
+    .array(orderItemSchema)
+    .min(1)
+    .max(50)
+    // One cart line per key, by construction. The availability check below
+    // aggregates by product anyway, but a duplicated key would still write two
+    // `order_items` rows for what the customer sees as one line.
+    .refine((items) => new Set(items.map((item) => item.key)).size === items.length, {
+      message: "duplicate cart line key",
+    }),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
@@ -96,20 +109,72 @@ export async function createOrder(input: unknown): Promise<ServiceResult<CreateO
  * naturally — there is nothing to roll back because nothing is written
  * until every line clears.
  */
+/** Re-derives the confirmation payload for an order that already exists — the reply to a retried checkout. */
+async function existingOrderResult(idempotencyKey: string): Promise<CreateOrderResult | null> {
+  const [order] = await db
+    .select({
+      id: orders.id,
+      code: orders.code,
+      customerName: orders.customerName,
+      city: orders.city,
+      subtotal: orders.subtotal,
+      discountTotal: orders.discountTotal,
+      total: orders.total,
+    })
+    .from(orders)
+    .where(eq(orders.idempotencyKey, idempotencyKey))
+    .limit(1);
+
+  if (!order) return null;
+
+  const itemRows = await db
+    .select({ nameSnapshot: orderItems.nameSnapshot, unitPrice: orderItems.unitPrice, qty: orderItems.qty })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, order.id))
+    .orderBy(asc(orderItems.createdAt));
+
+  return {
+    code: order.code,
+    customerName: order.customerName ?? "",
+    city: (order.city ?? "ndb") as "ndb" | "nkc",
+    items: itemRows.map((row) => ({ name: row.nameSnapshot, qty: row.qty, unitPrice: row.unitPrice })),
+    subtotal: order.subtotal,
+    discountTotal: order.discountTotal,
+    total: order.total,
+  };
+}
+
 export async function createOrderCore(
   input: unknown,
   messages: OrderMessages,
 ): Promise<ServiceResult<CreateOrderResult>> {
   const parsed = createOrderSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
+    // Name the offending field so checkout can point at it. Without this the
+    // one generic "invalid input" was the only feedback for a name over 120
+    // characters or a note over 500 — neither of which the form bounded.
+    const field = parsed.error.issues[0]?.path[0];
+    return {
+      ok: false,
+      error: {
+        code: "VALIDATION",
+        message: messages.invalidInput,
+        details: typeof field === "string" ? { field } : undefined,
+      },
+    };
   }
 
   const data = parsed.data;
 
+  // A retry after a lost response must not become a second order.
+  if (data.idempotencyKey) {
+    const existing = await existingOrderResult(data.idempotencyKey);
+    if (existing) return { ok: true, data: existing };
+  }
+
   const normalizedPhone = normalizeMauritanianPhone(data.phone);
   if (!normalizedPhone) {
-    return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
+    return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput, details: { field: "phone" } } };
   }
 
   const productIds = [...new Set(data.items.filter((item) => item.kind === "product").map((item) => item.productId!))];
@@ -157,6 +222,40 @@ export async function createOrderCore(
   const unavailableKeys: string[] = [];
   const resolved: ResolvedLine[] = [];
 
+  // One promotion query for the whole cart. This loop used to `await`
+  // `getEffectivePrice` per line, serialising up to 50 round trips on the one
+  // request path a customer is actively waiting on.
+  const prices = await getEffectivePrices(
+    [
+      ...productRows.map((row): PricingItem => ({
+        kind: "product",
+        id: row.id,
+        price: row.price,
+        discountPrice: row.discountPrice,
+      })),
+      ...bundleRows.map((row): PricingItem => ({ kind: "bundle", id: row.id, price: row.price })),
+    ],
+    "web",
+    now,
+  );
+
+  // Availability is checked against the total quantity requested for a given
+  // stock pool, not line by line: two lines naming the same product each used
+  // to clear the same single unit independently.
+  const requestedByStockKey = new Map<string, number>();
+  const stockKeyOf = (productId: string, variantId: string | null) => `${productId}:${variantId ?? ""}`;
+  for (const item of data.items) {
+    if (item.kind !== "product") continue;
+    const product = productById.get(item.productId!);
+    if (!product) continue;
+    const variant = item.variantId ? (variantById.get(item.variantId) ?? null) : null;
+    // A variant with `stockQty: null` sells from its parent's pool, so it
+    // aggregates against the parent, not against itself.
+    const poolVariantId = variant && variant.stockQty !== null ? variant.id : null;
+    const key = stockKeyOf(product.id, poolVariantId);
+    requestedByStockKey.set(key, (requestedByStockKey.get(key) ?? 0) + item.qty);
+  }
+
   for (const item of data.items) {
     if (item.kind === "product") {
       const product = productById.get(item.productId!);
@@ -174,17 +273,15 @@ export async function createOrderCore(
         }
       }
 
-      const stockQty = variant ? (variant.stockQty ?? product.stockQty) : product.stockQty;
-      if (!product.allowBackorder && stockQty < item.qty) {
+      const poolVariantId = variant && variant.stockQty !== null ? variant.id : null;
+      const stockQty = poolVariantId ? variant!.stockQty! : product.stockQty;
+      const requested = requestedByStockKey.get(stockKeyOf(product.id, poolVariantId)) ?? item.qty;
+      if (!product.allowBackorder && stockQty < requested) {
         unavailableKeys.push(item.key);
         continue;
       }
 
-      const effective = await getEffectivePrice(
-        { kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice },
-        "web",
-        now,
-      );
+      const effective = prices.get(product.id) ?? { price: product.price };
       const productName = localized(data.locale, product.nameAr, product.nameFr);
       const nameSnapshot = variant ? `${productName} — ${localized(data.locale, variant.nameAr, variant.nameFr)}` : productName;
 
@@ -211,7 +308,7 @@ export async function createOrderCore(
         continue;
       }
 
-      const effective = await getEffectivePrice({ kind: "bundle", id: bundle.id, price: bundle.price }, "web", now);
+      const effective = prices.get(bundle.id) ?? { price: bundle.price };
 
       resolved.push({
         key: item.key,
@@ -236,25 +333,37 @@ export async function createOrderCore(
   const total = resolved.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
   const discountTotal = subtotal - total;
 
-  const created = await insertWithUniqueOrderCode(now, (code) =>
-    db
-      .insert(orders)
-      .values({
-        code,
-        source: "web",
-        status: "pending",
-        customerName: data.customerName,
-        customerPhone: normalizedPhone,
-        city: data.city,
-        delivery: data.city === "ndb" ? "pickup" : "bus",
-        subtotal,
-        discountTotal,
-        total,
-        note: data.note || null,
-      })
-      .returning({ id: orders.id, code: orders.code })
-      .then(([row]) => row),
-  );
+  let created: { id: string; code: string };
+  try {
+    created = await insertWithUniqueOrderCode(now, (code) =>
+      db
+        .insert(orders)
+        .values({
+          code,
+          source: "web",
+          status: "pending",
+          customerName: data.customerName,
+          customerPhone: normalizedPhone,
+          city: data.city,
+          delivery: data.city === "ndb" ? "pickup" : "bus",
+          subtotal,
+          discountTotal,
+          total,
+          note: data.note || null,
+          idempotencyKey: data.idempotencyKey ?? null,
+        })
+        .returning({ id: orders.id, code: orders.code })
+        .then(([row]) => row),
+    );
+  } catch (error) {
+    // Two requests carrying the same key raced past the check above; the
+    // index is the authority, and the loser reports the winner's order.
+    if (data.idempotencyKey && isUniqueViolation(error, "orders_idempotency_key_unique")) {
+      const existing = await existingOrderResult(data.idempotencyKey);
+      if (existing) return { ok: true, data: existing };
+    }
+    throw error;
+  }
 
   try {
     await db.insert(orderItems).values(
@@ -380,13 +489,14 @@ const ORDERS_PAGE_SIZE = 50;
  * happened), not an order-desk one, so it sits with the register rather than
  * with the queue. An admin holds all four regardless.
  */
-export async function listOrdersAdmin(filters: OrderListFilters): Promise<ServiceResult<OrderListResult>> {
-  const auth = await requirePermission("orders.view");
-  if (!auth.ok) return auth;
-
-  const page = Math.max(1, filters.page ?? 1);
-  const conditions = [];
-  if (filters.status) conditions.push(eq(orders.status, filters.status));
+/**
+ * Every filter except `status`, shared by the list and by the status-badge
+ * counts above it — the counts used to aggregate over the whole table, so a
+ * search or date range narrowed the rows underneath while the badges kept
+ * reporting shop-wide totals.
+ */
+function buildOrderConditions(filters: Omit<OrderListFilters, "status" | "page">): SQL[] {
+  const conditions: SQL[] = [];
   if (filters.source) conditions.push(eq(orders.source, filters.source));
   if (filters.city) conditions.push(eq(orders.city, filters.city));
   if (filters.dateFrom) {
@@ -396,14 +506,24 @@ export async function listOrdersAdmin(filters: OrderListFilters): Promise<Servic
   if (filters.dateTo) {
     const to = new Date(filters.dateTo);
     if (!Number.isNaN(to.getTime())) {
-      to.setDate(to.getDate() + 1);
+      to.setUTCDate(to.getUTCDate() + 1);
       conditions.push(lt(orders.createdAt, to));
     }
   }
-  if (filters.search) {
-    const term = `%${filters.search.trim()}%`;
-    conditions.push(or(ilike(orders.code, term), ilike(orders.customerPhone, term), ilike(orders.customerName, term)));
+  const term = containsTerm(filters.search);
+  if (term) {
+    conditions.push(or(ilike(orders.code, term), ilike(orders.customerPhone, term), ilike(orders.customerName, term))!);
   }
+  return conditions;
+}
+
+export async function listOrdersAdmin(filters: OrderListFilters): Promise<ServiceResult<OrderListResult>> {
+  const auth = await requirePermission("orders.view");
+  if (!auth.ok) return auth;
+
+  const page = Math.max(1, filters.page ?? 1);
+  const conditions: SQL[] = buildOrderConditions(filters);
+  if (filters.status) conditions.push(eq(orders.status, filters.status));
   const where = conditions.length ? and(...conditions) : undefined;
 
   const [{ value: total }] = await db.select({ value: count() }).from(orders).where(where);
@@ -452,12 +572,24 @@ export async function listOrdersAdmin(filters: OrderListFilters): Promise<Servic
   };
 }
 
-/** Badge counts per status for the list page — every status always present, zero-filled. */
-export async function getOrderStatusCounts(): Promise<ServiceResult<Record<OrderStatusValue, number>>> {
+/**
+ * Badge counts per status for the list page — every status always present,
+ * zero-filled, and narrowed by the same search/source/city/date filters as the
+ * list beneath them, so the badges describe the result set the operator is
+ * actually looking at.
+ */
+export async function getOrderStatusCounts(
+  filters: Omit<OrderListFilters, "status" | "page"> = {},
+): Promise<ServiceResult<Record<OrderStatusValue, number>>> {
   const auth = await requirePermission("orders.view");
   if (!auth.ok) return auth;
 
-  const rows = await db.select({ status: orders.status, count: count() }).from(orders).groupBy(orders.status);
+  const conditions = buildOrderConditions(filters);
+  const rows = await db
+    .select({ status: orders.status, count: count() })
+    .from(orders)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .groupBy(orders.status);
 
   const counts = Object.fromEntries(ORDER_STATUS_VALUES.map((status) => [status, 0])) as Record<
     OrderStatusValue,
@@ -883,6 +1015,36 @@ async function recomputeOrderTotals(orderId: string): Promise<void> {
   await db.update(orders).set({ subtotal, discountTotal: subtotal - total, total }).where(eq(orders.id, orderId));
 }
 
+/**
+ * Atomically move an order from one exact status to another, returning
+ * `false` when it was no longer in `from` — because someone else got there
+ * first. `neon-http` has no transactions, so a read-then-write status guard is
+ * not a guard at all: this conditional update is the only thing that makes a
+ * lifecycle transition exclusive, and it is the same idiom
+ * `decrementStockLine` already uses for stock.
+ */
+async function claimOrderStatus(
+  id: string,
+  from: OrderStatusValue,
+  to: OrderStatusValue,
+  extra?: Partial<{ busCompany: string; busNote: string | null }>,
+): Promise<boolean> {
+  const rows = await db
+    .update(orders)
+    .set({ status: to, ...extra })
+    .where(and(eq(orders.id, id), eq(orders.status, from)))
+    .returning({ id: orders.id });
+  return rows.length > 0;
+}
+
+/** Hands a claimed transition back when the work behind it failed. */
+async function releaseOrderStatus(id: string, from: OrderStatusValue, to: OrderStatusValue): Promise<void> {
+  await db
+    .update(orders)
+    .set({ status: to })
+    .where(and(eq(orders.id, id), eq(orders.status, from)));
+}
+
 // --- Status transitions -----------------------------------------------------
 
 export type ConfirmOrderInput = {
@@ -936,6 +1098,15 @@ export async function confirmOrderCore(
     return { ok: false, error: { code: "VALIDATION", message: messages.paymentMethodRequired } };
   }
 
+  // Claim the transition before touching stock. The read above is advisory —
+  // it produces the good error message and decides whether a payment method is
+  // required — but this conditional update is what actually makes the
+  // transition exclusive. Without it, two operators confirming the same order
+  // from two devices both passed the read and both decremented.
+  if (!(await claimOrderStatus(id, "pending", "confirmed"))) {
+    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+  }
+
   const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
   const lines = await loadStockLines(
     itemRows.map((row) => ({
@@ -947,21 +1118,29 @@ export async function confirmOrderCore(
     })),
   );
 
-  const failedItem = await decrementStockLines(lines, id, actorId, order.source === "pos" ? "pos_sale" : "web_sale");
+  let failedItem: string | null;
+  try {
+    failedItem = await decrementStockLines(lines, id, actorId, order.source === "pos" ? "pos_sale" : "web_sale");
+  } catch (error) {
+    await releaseOrderStatus(id, "confirmed", "pending");
+    throw error;
+  }
+
   if (failedItem) {
+    // `decrementStockLines` already rolled back whatever it applied, so
+    // handing the order back to `pending` leaves nothing half-done.
+    await releaseOrderStatus(id, "confirmed", "pending");
     return {
       ok: false,
       error: { code: "CONFLICT", message: messages.insufficientStock, details: { itemName: failedItem } },
     };
   }
 
-  const patch: { status: "confirmed"; paymentMethod?: PaymentMethodValue; paymentNote?: string } = {
-    status: "confirmed",
-  };
+  const patch: { paymentMethod?: PaymentMethodValue; paymentNote?: string } = {};
   if (input?.paymentMethod) patch.paymentMethod = input.paymentMethod;
   if (input?.paymentNote) patch.paymentNote = input.paymentNote;
+  if (Object.keys(patch).length) await db.update(orders).set(patch).where(eq(orders.id, id));
 
-  await db.update(orders).set(patch).where(eq(orders.id, id));
   await db.insert(orderEvents).values({
     orderId: id,
     actorId,
@@ -1018,19 +1197,20 @@ export async function advanceOrderStatusCore(
     return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
   }
 
-  const patch: { status: OrderStatusValue; busCompany?: string; busNote?: string | null } = {
-    status: parsed.data.target,
-  };
+  const extra: Partial<{ busCompany: string; busNote: string | null }> = {};
 
   if (parsed.data.target === "shipped") {
     if (!parsed.data.busCompany) {
       return { ok: false, error: { code: "VALIDATION", message: messages.busCompanyRequired } };
     }
-    patch.busCompany = parsed.data.busCompany;
-    patch.busNote = parsed.data.busNote ?? null;
+    extra.busCompany = parsed.data.busCompany;
+    extra.busNote = parsed.data.busNote ?? null;
   }
 
-  await db.update(orders).set(patch).where(eq(orders.id, id));
+  if (!(await claimOrderStatus(id, current, parsed.data.target, extra))) {
+    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+  }
+
   await db.insert(orderEvents).values({
     orderId: id,
     actorId,
@@ -1067,21 +1247,32 @@ export async function cancelOrderCore(
     return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
   }
 
-  if (current !== "pending") {
-    const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-    const lines = await loadStockLines(
-      itemRows.map((row) => ({
-        productId: row.productId,
-        variantId: row.variantId,
-        bundleId: row.bundleId,
-        qty: row.qty,
-        nameSnapshot: row.nameSnapshot,
-      })),
-    );
-    for (const line of lines) await incrementStockLine(line, id, actorId, "cancel_restock");
+  // Claim first, restock second — the reverse order let two concurrent
+  // cancels each pass the status read and each restock the same lines,
+  // inventing inventory that was never returned.
+  if (!(await claimOrderStatus(id, current, "cancelled"))) {
+    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
   }
 
-  await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, id));
+  if (current !== "pending") {
+    try {
+      const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+      const lines = await loadStockLines(
+        itemRows.map((row) => ({
+          productId: row.productId,
+          variantId: row.variantId,
+          bundleId: row.bundleId,
+          qty: row.qty,
+          nameSnapshot: row.nameSnapshot,
+        })),
+      );
+      for (const line of lines) await incrementStockLine(line, id, actorId, "cancel_restock");
+    } catch (error) {
+      await releaseOrderStatus(id, "cancelled", current);
+      throw error;
+    }
+  }
+
   await db.insert(orderEvents).values({
     orderId: id,
     actorId,
@@ -1123,19 +1314,27 @@ export async function voidOrderCore(
     return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
   }
 
-  const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-  const lines = await loadStockLines(
-    itemRows.map((row) => ({
-      productId: row.productId,
-      variantId: row.variantId,
-      bundleId: row.bundleId,
-      qty: row.qty,
-      nameSnapshot: row.nameSnapshot,
-    })),
-  );
-  for (const line of lines) await incrementStockLine(line, id, actorId, "void_restock");
+  if (!(await claimOrderStatus(id, "delivered", "voided"))) {
+    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+  }
 
-  await db.update(orders).set({ status: "voided" }).where(eq(orders.id, id));
+  try {
+    const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    const lines = await loadStockLines(
+      itemRows.map((row) => ({
+        productId: row.productId,
+        variantId: row.variantId,
+        bundleId: row.bundleId,
+        qty: row.qty,
+        nameSnapshot: row.nameSnapshot,
+      })),
+    );
+    for (const line of lines) await incrementStockLine(line, id, actorId, "void_restock");
+  } catch (error) {
+    await releaseOrderStatus(id, "voided", "delivered");
+    throw error;
+  }
+
   await db.insert(orderEvents).values({
     orderId: id,
     actorId,
@@ -1144,6 +1343,115 @@ export async function voidOrderCore(
   });
 
   return { ok: true, data: { id } };
+}
+
+// --- Item picker options ----------------------------------------------------
+
+export type OrderItemOption = {
+  kind: "product" | "bundle";
+  /** Stable option key; also the `productId`/`bundleId` sent to `addOrderItem`. */
+  id: string;
+  productId: string | null;
+  variantId: string | null;
+  bundleId: string | null;
+  nameAr: string;
+  nameFr: string;
+  sku: string;
+  price: number;
+};
+
+/**
+ * What the order detail page's "add item" picker offers, gated on
+ * `orders.manage` — the permission the operator already needs to edit an
+ * order at all.
+ *
+ * It used to call `listProducts`, which gates on `catalog.view`, and
+ * `PERMISSION_REQUIRES` does not imply that from `orders.manage`: an account
+ * granted order management got a permanently empty dropdown with no way to
+ * tell a permission problem from an empty catalog.
+ *
+ * Variants are first-class entries. The picker only ever offered bare
+ * products, so adding a variant-tracked item to an order decremented the
+ * parent's shared pool and lost the colour or size the customer asked for.
+ */
+export async function listOrderItemOptions(): Promise<ServiceResult<OrderItemOption[]>> {
+  const auth = await requirePermission("orders.manage");
+  if (!auth.ok) return auth;
+
+  const [productRows, variantRows, bundleRows] = await Promise.all([
+    db
+      .select({
+        id: products.id,
+        nameAr: products.nameAr,
+        nameFr: products.nameFr,
+        sku: products.sku,
+        price: products.price,
+        discountPrice: products.discountPrice,
+      })
+      .from(products)
+      .where(eq(products.isActive, true))
+      .orderBy(asc(products.nameFr)),
+    db
+      .select({
+        id: productVariants.id,
+        productId: productVariants.productId,
+        variantNameAr: productVariants.nameAr,
+        variantNameFr: productVariants.nameFr,
+        sku: productVariants.sku,
+        productNameAr: products.nameAr,
+        productNameFr: products.nameFr,
+        price: products.price,
+        discountPrice: products.discountPrice,
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(productVariants.productId, products.id))
+      .where(and(eq(productVariants.isActive, true), eq(products.isActive, true)))
+      .orderBy(asc(products.nameFr)),
+    db
+      .select({ id: bundles.id, nameAr: bundles.nameAr, nameFr: bundles.nameFr, sku: bundles.sku, price: bundles.price })
+      .from(bundles)
+      .where(eq(bundles.isActive, true))
+      .orderBy(asc(bundles.nameFr)),
+  ]);
+
+  return {
+    ok: true,
+    data: [
+      ...productRows.map((row): OrderItemOption => ({
+        kind: "product",
+        id: row.id,
+        productId: row.id,
+        variantId: null,
+        bundleId: null,
+        nameAr: row.nameAr,
+        nameFr: row.nameFr,
+        sku: row.sku,
+        price: row.discountPrice ?? row.price,
+      })),
+      ...variantRows.map((row): OrderItemOption => ({
+        kind: "product",
+        id: row.id,
+        productId: row.productId,
+        variantId: row.id,
+        bundleId: null,
+        nameAr: `${row.productNameAr} — ${row.variantNameAr}`,
+        nameFr: `${row.productNameFr} — ${row.variantNameFr}`,
+        sku: row.sku,
+        price: row.discountPrice ?? row.price,
+      })),
+      ...bundleRows.map((row): OrderItemOption => ({
+        kind: "bundle",
+        id: row.id,
+        productId: null,
+        variantId: null,
+        bundleId: row.id,
+        nameAr: row.nameAr,
+        nameFr: row.nameFr,
+        sku: row.sku,
+        price: row.price,
+      })),
+    ],
+  };
 }
 
 // --- Item edits (pending | confirmed | preparing) ---------------------------
@@ -1309,25 +1617,12 @@ export async function updateOrderItemQtyCore(
   const newQty = parsed.data.qty;
   if (newQty === oldQty) return { ok: true, data: { id: item.id } };
 
-  const now = new Date();
-  let newUnitPrice = item.unitPrice;
-  if (item.productId) {
-    const [product] = await db.select().from(products).where(eq(products.id, item.productId)).limit(1);
-    if (product) {
-      const effective = await getEffectivePrice(
-        { kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice },
-        order.source as PricingChannel,
-        now,
-      );
-      newUnitPrice = effective.price;
-    }
-  } else if (item.bundleId) {
-    const [bundle] = await db.select().from(bundles).where(eq(bundles.id, item.bundleId)).limit(1);
-    if (bundle) {
-      const effective = await getEffectivePrice({ kind: "bundle", id: bundle.id, price: bundle.price }, order.source as PricingChannel, now);
-      newUnitPrice = effective.price;
-    }
-  }
+  // The line keeps the price it was sold at. Re-deriving it here moved what
+  // the customer owes every time an admin nudged a quantity — including
+  // downwards, on an order already confirmed and paid for over WhatsApp —
+  // with nothing but a generic `items_edited` event to explain the change.
+  // Adding a line still prices at today's rate; that is a new agreement.
+  const newUnitPrice = item.unitPrice;
 
   const delta = newQty - oldQty;
   if (status !== "pending" && delta !== 0) {

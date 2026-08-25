@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getLocale } from "next-intl/server";
 import type { ServiceResult } from "@/src/lib/errors";
+import { readJsonArray } from "@/src/lib/form-data";
 import type { DeactivatedBundleRef } from "@/src/services/bundles";
 import {
   createProduct,
@@ -41,8 +42,8 @@ function readProductInput(formData: FormData) {
     allowBackorder: formData.get("allowBackorder") === "on",
     isActive: formData.get("isActive") === "on",
     slug: formData.get("slug"),
-    images: JSON.parse(String(formData.get("images") || "[]")),
-    variants: JSON.parse(String(formData.get("variants") || "[]")),
+    images: readJsonArray(formData, "images"),
+    variants: readJsonArray(formData, "variants"),
   };
 }
 
@@ -98,13 +99,22 @@ export async function toggleProductActiveAction(
   return { ok: true, data: { deactivatedBundles: result.data.deactivatedBundles } };
 }
 
+/**
+ * Returns its result rather than swallowing it. This used to be `void`: a
+ * refused permission or a database error left the toggle looking untouched,
+ * which is the worst shape a gate can take — correct, and indistinguishable
+ * from broken.
+ */
 export async function toggleVariantActiveAction(
   productId: string,
   variantId: string,
   nextActive: boolean,
-) {
+): Promise<ServiceResult<null>> {
   const result = await toggleVariantActive(variantId, nextActive);
-  if (result.ok) await revalidateProducts(productId);
+  if (!result.ok) return result;
+
+  await revalidateProducts(productId);
+  return { ok: true, data: null };
 }
 
 export type ToggleQuickPickState = ServiceResult<null> | null;

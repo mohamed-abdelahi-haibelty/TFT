@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, gte, ilike, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import { getLocale, getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db } from "@/src/db/client";
 import { categories, orders, products, productVariants, stockMovements, users } from "@/src/db/schema";
 import type { ServiceResult } from "@/src/lib/errors";
+import { containsTerm } from "@/src/lib/search";
 import { requirePermission } from "@/src/services/authz";
 
 export type InventoryItem = {
@@ -34,7 +35,7 @@ export async function listInventoryItems(filters: {
   const nameColumn = locale === "ar" ? products.nameAr : products.nameFr;
   const variantNameColumn = locale === "ar" ? productVariants.nameAr : productVariants.nameFr;
 
-  const term = filters.search ? `%${filters.search.trim()}%` : null;
+  const term = containsTerm(filters.search);
 
   const productConditions = [];
   if (term) {
@@ -133,6 +134,8 @@ export type InventoryMessages = {
   invalidInput: string;
   notFound: string;
   belowZero: string;
+  /** Absolute set lost a race — the operator needs to re-read before retrying. */
+  stockMoved: string;
 };
 
 const adjustStockSchema = z.object({
@@ -154,6 +157,7 @@ export async function adjustStock(input: unknown): Promise<ServiceResult<{ stock
     invalidInput: t("invalidInput"),
     notFound: t("notFound"),
     belowZero: t("belowZero"),
+    stockMoved: t("stockMoved"),
   });
 }
 
@@ -194,32 +198,52 @@ export async function adjustStockCore(
   const delta = mode === "absolute" ? value - current : value;
   if (delta === 0) return { ok: true, data: { stockQty: current } };
 
-  // Same atomic-conditional-update shape as `decrementStockLine` — a
-  // non-backorder item's floor (`stockQty + delta >= 0`) is enforced in the
-  // `WHERE` clause itself, so a race between the read above and this write
-  // still can't drive it negative.
+  // Two different conditional updates, because the two modes assert different
+  // things.
+  //
+  // `delta` ("add 5") is relative and composes with whatever else happened
+  // since the read, so it only needs the non-negative floor.
+  //
+  // `absolute` ("set to 10") does not compose: the delta above is derived from
+  // a value that may already be stale, so it must also assert that the row
+  // still holds what we read. A sale landing mid stock-take used to silently
+  // turn "set to 10" into 9, and two people setting 10 from 5 landed on 15.
+  const variantWhere = variantId
+    ? mode === "absolute"
+      ? and(eq(productVariants.id, variantId), eq(productVariants.stockQty, current))
+      : product.allowBackorder
+        ? eq(productVariants.id, variantId)
+        : and(eq(productVariants.id, variantId), gte(productVariants.stockQty, -delta))
+    : undefined;
+
+  const productWhere = variantId
+    ? undefined
+    : mode === "absolute"
+      ? and(eq(products.id, productId), eq(products.stockQty, current))
+      : product.allowBackorder
+        ? eq(products.id, productId)
+        : and(eq(products.id, productId), gte(products.stockQty, -delta));
+
   const rows = variantId
     ? await db
         .update(productVariants)
         .set({ stockQty: sql`${productVariants.stockQty} + ${delta}` })
-        .where(
-          product.allowBackorder
-            ? eq(productVariants.id, variantId)
-            : and(eq(productVariants.id, variantId), gte(productVariants.stockQty, -delta)),
-        )
+        .where(variantWhere)
         .returning({ stockQty: productVariants.stockQty })
     : await db
         .update(products)
         .set({ stockQty: sql`${products.stockQty} + ${delta}` })
-        .where(
-          product.allowBackorder
-            ? eq(products.id, productId)
-            : and(eq(products.id, productId), gte(products.stockQty, -delta)),
-        )
+        .where(productWhere)
         .returning({ stockQty: products.stockQty });
 
   if (!rows.length || rows[0].stockQty === null) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.belowZero } };
+    return {
+      ok: false,
+      error: {
+        code: "CONFLICT",
+        message: mode === "absolute" ? messages.stockMoved : messages.belowZero,
+      },
+    };
   }
 
   await db.insert(stockMovements).values({
@@ -277,8 +301,10 @@ export async function listStockMovements(filters: {
   if (filters.dateTo) {
     const to = new Date(filters.dateTo);
     if (!Number.isNaN(to.getTime())) {
-      to.setUTCHours(23, 59, 59, 999);
-      conditions.push(lte(stockMovements.createdAt, to));
+      // Exclusive upper bound one UTC day on, matching `listOrdersAdmin` —
+      // `23:59:59.999` silently drops anything stamped in the final millisecond.
+      to.setUTCDate(to.getUTCDate() + 1);
+      conditions.push(lt(stockMovements.createdAt, to));
     }
   }
   const where = conditions.length ? and(...conditions) : undefined;

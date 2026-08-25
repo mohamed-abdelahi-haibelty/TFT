@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { CategoryRow } from "@/components/admin/category-row";
@@ -26,7 +27,10 @@ export default async function AdminCategoriesPage({
   setRequestLocale(locale);
 
   const auth = await requireUser();
-  if (!auth.ok) return null;
+  // The protected layout already redirects, so this is a belt-and-braces
+  // path — but it has to lead somewhere. Returning `null` rendered an empty
+  // admin shell with no explanation and no way out.
+  if (!auth.ok) redirect(`/${locale}/admin/login`);
 
   if (!hasPermission(auth.data, "catalog.view")) {
     return <AdminForbidden backHref={firstAllowedSection(auth.data) ?? "/admin"} />;

@@ -41,6 +41,18 @@ export const orders = pgTable(
     discountTotal: integer("discount_total").notNull().default(0),
     total: integer("total").notNull(),
     note: text("note"),
+    /**
+     * Client-minted key for one checkout attempt. Neither order-creation path
+     * was idempotent: the classic mobile failure — request lands, response is
+     * lost, customer retries — produced a duplicate pending order on the
+     * storefront and a duplicate *delivered* sale at the register, double
+     * stock decrement and double revenue included. A repeat carrying the same
+     * key hits the unique index and returns the original order instead.
+     *
+     * Nullable, and Postgres allows many NULLs under a unique index, so
+     * historical rows and any caller that doesn't send one are unaffected.
+     */
+    idempotencyKey: text("idempotency_key").unique(),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,
   },

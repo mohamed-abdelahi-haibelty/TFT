@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { CircleAlert, Lock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { localized } from "@/src/lib/locale-text";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageUploader } from "@/components/admin/image-uploader";
@@ -49,6 +50,7 @@ export function ProductForm({
   canEditPricing?: boolean;
 }) {
   const t = useTranslations("admin.products");
+  const locale = useLocale();
   const isEditMode = !!product;
 
   const action = isEditMode ? updateProductAction.bind(null, product.id) : createProductAction;
@@ -405,7 +407,7 @@ export function ProductForm({
 
         {isEditMode && confirmingDelete ? (
           <div className="flex flex-col items-start gap-2">
-            <p className="text-sm text-ink">{t("deleteConfirmPrompt", { name: product.nameFr })}</p>
+            <p className="text-sm text-ink">{t("deleteConfirmPrompt", { name: localized(locale, product.nameAr, product.nameFr) })}</p>
             <div className="flex items-center gap-2">
               <Button
                 type="button"

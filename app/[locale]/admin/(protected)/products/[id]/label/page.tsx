@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
@@ -30,7 +30,10 @@ export default async function ProductLabelPage({
   // Printing is its own permission: a catalogue reader is not automatically
   // someone who prints shelf labels.
   const auth = await requireUser();
-  if (!auth.ok) return null;
+  // The protected layout already redirects, so this is a belt-and-braces
+  // path — but it has to lead somewhere. Returning `null` rendered an empty
+  // admin shell with no explanation and no way out.
+  if (!auth.ok) redirect(`/${locale}/admin/login`);
   if (!hasPermission(auth.data, "labels.print")) {
     return <AdminForbidden backHref={firstAllowedSection(auth.data) ?? "/admin"} />;
   }

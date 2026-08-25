@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, integer, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, integer, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
 import { id, timestamps } from "./columns";
 import { productVariants, products } from "./catalog";
 
@@ -40,5 +40,12 @@ export const bundleItems = pgTable(
     qty: integer("qty").notNull().default(1),
     ...timestamps,
   },
-  (table) => [check("bundle_items_qty_positive", sql`${table.qty} >= 1`)],
+  (table) => [
+    check("bundle_items_qty_positive", sql`${table.qty} >= 1`),
+    // One row per (bundle, product, variant). Without it the same component
+    // could be listed twice, which the storefront manifest then rendered under
+    // a colliding React key — and which nothing in the UI can express anyway,
+    // since quantity is what a repeat is meant to mean.
+    unique("bundle_items_bundle_product_variant_unique").on(table.bundleId, table.productId, table.variantId),
+  ],
 );

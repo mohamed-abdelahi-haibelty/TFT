@@ -29,10 +29,16 @@ export const auth = betterAuth({
         input: false,
         defaultValue: true,
       },
-      // Rides on the session so a gate costs no extra round trip. `input:
-      // false` keeps it un-settable through any auth endpoint — the only
-      // writer is `setStaffPermissions` in `src/services/users.ts`, behind
-      // the admin-only `users.manage` gate.
+      // Read back with the session on every gate check. `session.cookieCache`
+      // is deliberately NOT enabled: without it Better Auth re-reads the user
+      // row per request, which is why revoking a permission takes effect
+      // immediately. Turning cookie caching on would silently make revocation
+      // lag by its TTL — if that trade is ever wanted, delete the target's
+      // sessions in `setStaffPermissions` at the same time.
+      //
+      // `input: false` keeps it un-settable through any auth endpoint — the
+      // only writer is `setStaffPermissions` in `src/services/users.ts`,
+      // behind the admin-only `users.manage` gate.
       permissions: {
         type: "string[]",
         input: false,

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getLocale } from "next-intl/server";
 import type { ServiceResult } from "@/src/lib/errors";
+import { readJsonArray } from "@/src/lib/form-data";
 import { createPromotion, togglePromotionActive, updatePromotion } from "@/src/services/promotions";
 
 async function revalidatePromotions(promotionId?: string) {
@@ -26,8 +27,8 @@ function readPromotionInput(formData: FormData) {
     endsAt: formData.get("endsAt"),
     channel: formData.get("channel"),
     isActive: formData.get("isActive") === "on",
-    productIds: JSON.parse(String(formData.get("productIds") || "[]")),
-    bundleIds: JSON.parse(String(formData.get("bundleIds") || "[]")),
+    productIds: readJsonArray(formData, "productIds"),
+    bundleIds: readJsonArray(formData, "bundleIds"),
   };
 }
 

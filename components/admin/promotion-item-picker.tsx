@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Plus, Search } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { localized } from "@/src/lib/locale-text";
 import { formatMoney } from "@/src/lib/money";
 import type {
   PromotionPickerBundle,
@@ -33,6 +34,7 @@ export function PromotionItemPicker({
   onAddCategory: (categoryId: string) => void;
 }) {
   const t = useTranslations("admin.promotions");
+  const locale = useLocale();
   const [tab, setTab] = useState<Tab>("products");
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -108,7 +110,7 @@ export function PromotionItemPicker({
                 <SelectItem value="">{t("pickerCategoryAll")}</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id}>
-                    {category.nameFr}
+                    {localized(locale, category.nameAr, category.nameFr)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -156,7 +158,7 @@ export function PromotionItemPicker({
                       key={product.id}
                       className="border-b border-border transition-colors last:border-0 hover:bg-paper"
                     >
-                      <td className="px-4 py-2.5 text-sm text-ink">{product.nameFr}</td>
+                      <td className="px-4 py-2.5 text-sm text-ink">{localized(locale, product.nameAr, product.nameFr)}</td>
                       <td className="px-4 py-2.5 font-mono text-xs text-ink-soft">{product.sku}</td>
                       <td className="px-4 py-2.5 font-mono text-sm text-ink">{formatMoney(product.price)}</td>
                       <td className="px-4 py-2.5">
@@ -185,7 +187,7 @@ export function PromotionItemPicker({
                     key={bundle.id}
                     className="border-b border-border transition-colors last:border-0 hover:bg-paper"
                   >
-                    <td className="px-4 py-2.5 text-sm text-ink">{bundle.nameFr}</td>
+                    <td className="px-4 py-2.5 text-sm text-ink">{localized(locale, bundle.nameAr, bundle.nameFr)}</td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-soft">{bundle.sku}</td>
                     <td className="px-4 py-2.5 font-mono text-sm text-ink">{formatMoney(bundle.price)}</td>
                     <td className="px-4 py-2.5">

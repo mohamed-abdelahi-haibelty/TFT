@@ -1,15 +1,19 @@
 import { AlertTriangle, CircleCheck, XCircle } from "lucide-react";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
+import { AdminLoadError } from "@/components/admin/admin-load-error";
 import { ProductRowActions } from "@/components/admin/product-row-actions";
 import { QuickPickManager } from "@/components/admin/quick-pick-manager";
 import { QuickPickToggle } from "@/components/admin/quick-pick-toggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "@/src/i18n/navigation";
+import { localized } from "@/src/lib/locale-text";
 import { formatMoney } from "@/src/lib/money";
 import { firstAllowedSection, hasPermission } from "@/src/lib/permissions";
 import { requireUser } from "@/src/services/authz";
+import { listBundleDependenciesByProduct } from "@/src/services/bundles";
 import { listCategories } from "@/src/services/categories";
 import { listProducts } from "@/src/services/products";
 
@@ -35,24 +39,47 @@ export default async function AdminProductsPage({
   const query = await searchParams;
 
   const auth = await requireUser();
-  if (!auth.ok) return null;
+  // The protected layout already redirects, so this is a belt-and-braces
+  // path — but it has to lead somewhere. Returning `null` rendered an empty
+  // admin shell with no explanation and no way out.
+  if (!auth.ok) redirect(`/${locale}/admin/login`);
 
   if (!hasPermission(auth.data, "catalog.view")) {
     return <AdminForbidden backHref={firstAllowedSection(auth.data) ?? "/admin"} />;
   }
 
-  const [productsResult, categoriesResult] = await Promise.all([
+  const canManage = hasPermission(auth.data, "catalog.manage");
+
+  const [productsResult, categoriesResult, bundleDependencies] = await Promise.all([
     listProducts({
       search: query.q,
       categoryId: query.category,
       activeOnly: query.activeOnly === "on",
     }),
     listCategories(),
+    // Only the deactivate confirmation needs this, and only `catalog.manage`
+    // ever sees that control.
+    canManage ? listBundleDependenciesByProduct() : Promise.resolve(new Map()),
   ]);
-  const products = productsResult.ok ? productsResult.data : [];
-  const categories = categoriesResult.ok ? categoriesResult.data : [];
 
   const t = await getTranslations("admin.products");
+
+  // A failed read is not an empty catalog. Rendering "no products yet" for a
+  // dropped connection is how an operator concludes the shop has been wiped.
+  if (!productsResult.ok) {
+    return (
+      <div className="flex flex-col gap-8">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-ink">{t("title")}</h1>
+          <p className="mt-1 text-sm text-ink-soft">{t("subtitle")}</p>
+        </div>
+        <AdminLoadError error={productsResult.error} retryHref="/admin/products" />
+      </div>
+    );
+  }
+
+  const products = productsResult.data;
+  const categories = categoriesResult.ok ? categoriesResult.data : [];
 
   const quickPickItems = products
     .filter((product) => product.isQuickPick)
@@ -76,7 +103,7 @@ export default async function AdminProductsPage({
         ) : null}
       </div>
 
-      {hasPermission(auth.data, "catalog.manage") ? <QuickPickManager items={quickPickItems} /> : null}
+      {canManage ? <QuickPickManager items={quickPickItems} /> : null}
 
       <form className="flex flex-wrap items-center gap-3" method="get">
         <input
@@ -94,7 +121,7 @@ export default async function AdminProductsPage({
             <SelectItem value="">{t("categoryFilterAll")}</SelectItem>
             {categories.map((category) => (
               <SelectItem key={category.id} value={category.id}>
-                {category.nameFr}
+                {localized(locale, category.nameAr, category.nameFr)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -135,7 +162,7 @@ export default async function AdminProductsPage({
               <th className="px-5 py-3 text-start text-xs font-semibold tracking-wide text-ink-soft">
                 {t("tableStatus")}
               </th>
-              {hasPermission(auth.data, "catalog.manage") ? (
+              {canManage ? (
                 <>
                   <th className="px-5 py-3 text-start text-xs font-semibold tracking-wide text-ink-soft">
                     {t("tablePos")}
@@ -151,7 +178,7 @@ export default async function AdminProductsPage({
             {products.length === 0 ? (
               <tr>
                 <td
-                  colSpan={hasPermission(auth.data, "catalog.manage") ? 7 : 5}
+                  colSpan={canManage ? 7 : 5}
                   className="px-5 py-8 text-center text-sm text-ink-soft"
                 >
                   {t("empty")}
@@ -168,10 +195,14 @@ export default async function AdminProductsPage({
                     className="border-b border-border transition-colors last:border-0 hover:bg-paper"
                   >
                     <td className="px-5 py-4">
-                      <p className="text-sm font-medium text-nowrap text-ink">{product.nameFr}</p>
+                      <p className="text-sm font-medium text-nowrap text-ink">
+                        {localized(locale, product.nameAr, product.nameFr)}
+                      </p>
                       <p className="font-mono text-xs text-ink-soft">{product.sku}</p>
                     </td>
-                    <td className="px-5 py-4 text-sm text-ink-soft">{product.categoryNameFr}</td>
+                    <td className="px-5 py-4 text-sm text-ink-soft">
+                      {localized(locale, product.categoryNameAr, product.categoryNameFr)}
+                    </td>
                     <td className="px-5 py-4 font-mono text-sm text-ink">
                       {product.discountPrice != null ? (
                         <>
@@ -214,13 +245,17 @@ export default async function AdminProductsPage({
                         {product.isActive ? t("statusActive") : t("statusInactive")}
                       </span>
                     </td>
-                    {hasPermission(auth.data, "catalog.manage") ? (
+                    {canManage ? (
                       <>
                         <td className="px-5 py-4">
                           <QuickPickToggle productId={product.id} isQuickPick={product.isQuickPick} />
                         </td>
                         <td className="px-5 py-4">
-                          <ProductRowActions productId={product.id} isActive={product.isActive} />
+                          <ProductRowActions
+                            productId={product.id}
+                            isActive={product.isActive}
+                            dependentBundles={bundleDependencies.get(product.id) ?? []}
+                          />
                         </td>
                       </>
                     ) : null}

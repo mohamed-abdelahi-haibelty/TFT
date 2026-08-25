@@ -14,6 +14,8 @@ export async function resolvePosItemAction(sku: string): Promise<ServiceResult<P
 
 export type CompleteSalePayload = {
   paymentMethod: "cash" | "bankily" | "masrvi" | "sedad" | "other";
+  /** One key per sale, reused across retries — see `orders.idempotencyKey`. */
+  idempotencyKey?: string;
   lines: {
     kind: "product" | "bundle";
     productId?: string;

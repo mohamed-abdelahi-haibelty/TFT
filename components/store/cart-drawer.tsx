@@ -17,6 +17,13 @@ import {
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 
+/**
+ * Matches `orderItemSchema`'s own `max(99)`. Without it the stepper let a
+ * customer build a line the server would reject at submit with a single
+ * unattributed "invalid input", one screen after the mistake was made.
+ */
+const MAX_LINE_QTY = 99;
+
 function useCart(): CartItem[] {
   const [cart, setCart] = useState<CartItem[]>([]);
 
@@ -202,9 +209,10 @@ export function CartDrawer() {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setCartItemQty(line.key, line.qty + 1)}
+                          onClick={() => setCartItemQty(line.key, Math.min(line.qty + 1, MAX_LINE_QTY))}
+                          disabled={line.qty >= MAX_LINE_QTY}
                           aria-label={t("increaseQty")}
-                          className="flex size-11 items-center justify-center text-ink transition-colors hover:bg-paper"
+                          className="flex size-11 items-center justify-center text-ink transition-colors hover:bg-paper disabled:cursor-not-allowed disabled:text-ink-soft/40"
                         >
                           <Plus className="size-4" aria-hidden="true" />
                         </button>

@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db } from "@/src/db/client";
 import { categories, products } from "@/src/db/schema";
+import { isUniqueViolation } from "@/src/lib/db-errors";
 import type { ServiceResult } from "@/src/lib/errors";
 import { slugify } from "@/src/lib/slug";
 import { requirePermission } from "@/src/services/authz";
@@ -89,17 +90,25 @@ export async function createCategoryCore(
 
   const [{ value: nextSort }] = await db.select({ value: count() }).from(categories);
 
-  const [created] = await db
-    .insert(categories)
-    .values({
-      nameAr: parsed.data.nameAr,
-      nameFr: parsed.data.nameFr,
-      slug,
-      sort: nextSort,
-    })
-    .returning({ id: categories.id });
+  try {
+    const [created] = await db
+      .insert(categories)
+      .values({
+        nameAr: parsed.data.nameAr,
+        nameFr: parsed.data.nameFr,
+        slug,
+        sort: nextSort,
+      })
+      .returning({ id: categories.id });
 
-  return { ok: true, data: { id: created.id } };
+    return { ok: true, data: { id: created.id } };
+  } catch (error) {
+    // Check-then-insert is not atomic; see `createProductCore`.
+    if (isUniqueViolation(error, "categories_slug_unique")) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
+    }
+    throw error;
+  }
 }
 
 export async function updateCategory(
@@ -131,10 +140,17 @@ export async function updateCategoryCore(
     return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
   }
 
-  await db
-    .update(categories)
-    .set({ nameAr: parsed.data.nameAr, nameFr: parsed.data.nameFr, slug })
-    .where(eq(categories.id, id));
+  try {
+    await db
+      .update(categories)
+      .set({ nameAr: parsed.data.nameAr, nameFr: parsed.data.nameFr, slug })
+      .where(eq(categories.id, id));
+  } catch (error) {
+    if (isUniqueViolation(error, "categories_slug_unique")) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
+    }
+    throw error;
+  }
 
   return { ok: true, data: { id } };
 }

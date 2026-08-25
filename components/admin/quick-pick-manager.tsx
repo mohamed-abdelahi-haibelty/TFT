@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { localized } from "@/src/lib/locale-text";
 import { useRouter } from "@/src/i18n/navigation";
 import { reorderQuickPicksAction } from "@/src/services/product-actions";
 
@@ -11,6 +12,7 @@ export type QuickPickManagerItem = { id: string; nameAr: string; nameFr: string 
 
 export function QuickPickManager({ items }: { items: QuickPickManagerItem[] }) {
   const t = useTranslations("admin.products");
+  const locale = useLocale();
   const { toast } = useToast();
   const router = useRouter();
   const [movingId, setMovingId] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export function QuickPickManager({ items }: { items: QuickPickManagerItem[] }) {
                   <ChevronDown className="size-4" aria-hidden="true" />
                 </button>
               </div>
-              <span className="text-sm text-ink">{item.nameFr}</span>
+              <span className="text-sm text-ink">{localized(locale, item.nameAr, item.nameFr)}</span>
             </li>
           ))}
         </ol>

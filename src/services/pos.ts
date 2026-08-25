@@ -14,12 +14,14 @@ import {
   products,
 } from "@/src/db/schema";
 import { type AvailabilityComponent, deriveMaxSellable } from "@/src/lib/bundle-availability";
+import { isUniqueViolation } from "@/src/lib/db-errors";
 import type { ServiceResult } from "@/src/lib/errors";
 import { localized } from "@/src/lib/locale-text";
+import { logger } from "@/src/lib/logger";
 import { insertWithUniqueOrderCode } from "@/src/lib/order-code";
 import { track } from "@/src/lib/analytics";
 import { getEffectivePrice, getEffectivePrices, type PricingItem } from "@/src/services/pricing";
-import { requirePermission } from "@/src/services/authz";
+import { can, requirePermission } from "@/src/services/authz";
 import {
   decrementStockLine,
   incrementStockLine,
@@ -36,6 +38,7 @@ export type PosMessages = {
   invalidInput: string;
   itemUnavailable: string;
   insufficientStock: string;
+  overrideForbidden: string;
 };
 
 async function getPosMessages(): Promise<PosMessages> {
@@ -44,6 +47,7 @@ async function getPosMessages(): Promise<PosMessages> {
     invalidInput: t("invalidInput"),
     itemUnavailable: t("itemUnavailable"),
     insufficientStock: t("insufficientStock"),
+    overrideForbidden: t("overrideForbidden"),
   };
 }
 
@@ -84,6 +88,38 @@ async function firstImageByProduct(productIds: string[]): Promise<Map<string, st
     if (!byProduct.has(row.productId)) byProduct.set(row.productId, row.publicId);
   }
   return byProduct;
+}
+
+/** Max sellable units per bundle, from its components' current stock — the grid's own copy of `deriveMaxSellable`, in one query for the whole list. */
+async function posBundleAvailability(bundleIds: string[]): Promise<Map<string, { maxSellable: number | null }>> {
+  if (bundleIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      bundleId: bundleItems.bundleId,
+      qty: bundleItems.qty,
+      variantStockQty: productVariants.stockQty,
+      productStockQty: products.stockQty,
+      allowBackorder: products.allowBackorder,
+    })
+    .from(bundleItems)
+    .innerJoin(products, eq(bundleItems.productId, products.id))
+    .leftJoin(productVariants, eq(bundleItems.variantId, productVariants.id))
+    .where(inArray(bundleItems.bundleId, bundleIds));
+
+  const byBundle = new Map<string, AvailabilityComponent[]>();
+  for (const row of rows) {
+    const list = byBundle.get(row.bundleId) ?? [];
+    list.push({ qty: row.qty, stock: row.variantStockQty ?? row.productStockQty, allowBackorder: row.allowBackorder });
+    byBundle.set(row.bundleId, list);
+  }
+
+  const result = new Map<string, { maxSellable: number | null }>();
+  // A bundle with no components at all derives to 0, same as everywhere else.
+  for (const bundleId of bundleIds) {
+    result.set(bundleId, { maxSellable: deriveMaxSellable(byBundle.get(bundleId) ?? []) });
+  }
+  return result;
 }
 
 /** Active, pinned products only, in the admin-managed order — task 14: "products flagged `is_quick_pick`, ordered by `quick_pick_sort`." Both roles read this; only `products.ts`'s `toggleQuickPick`/`reorderQuickPicks` (admin-only) can change it. */
@@ -173,8 +209,9 @@ export async function listPosCatalog(locale: string): Promise<ServiceResult<PosG
     db.select().from(bundles).where(eq(bundles.isActive, true)),
   ]);
 
-  const [imageByProduct, priceByItem] = await Promise.all([
+  const [imageByProduct, bundleAvailability, priceByItem] = await Promise.all([
     firstImageByProduct([...productRows.map((r) => r.id), ...variantRows.map((r) => r.productId)]),
+    posBundleAvailability(bundleRows.map((row) => row.id)),
     getEffectivePrices(
       [
         ...productRows.map((p): PricingItem => ({ kind: "product", id: p.id, price: p.price, discountPrice: p.discountPrice })),
@@ -222,6 +259,11 @@ export async function listPosCatalog(locale: string): Promise<ServiceResult<PosG
     }),
     ...bundleRows.map((row): PosGridItem => {
       const effective = priceByItem.get(row.id)!;
+      // A bundle tile used to hard-code "unlimited", so the grid never marked
+      // one out of stock and a cashier only found out after tapping it. This
+      // is the same `deriveMaxSellable` the scan path (`resolvePosItemCore`)
+      // and the storefront's own boxes list already report.
+      const availability = bundleAvailability.get(row.id) ?? { maxSellable: 0 };
       return {
         kind: "bundle",
         id: row.id,
@@ -229,8 +271,8 @@ export async function listPosCatalog(locale: string): Promise<ServiceResult<PosG
         name: localized(locale, row.nameAr, row.nameFr),
         unitPrice: effective.price,
         promo: !!effective.promo,
-        stockQty: null,
-        allowBackorder: true,
+        stockQty: availability.maxSellable,
+        allowBackorder: availability.maxSellable === null,
         categoryId: null,
         imagePublicId: null,
       };
@@ -431,15 +473,42 @@ const completeSaleSchema = z.object({
   paymentMethod: z.enum(["cash", "bankily", "masrvi", "sedad", "other"]),
   lines: z.array(posLineSchema).min(1).max(50),
   removedLines: z.array(removedLineSchema).max(50).default([]),
+  /**
+   * One key per sale at the register. A dropped response used to leave the
+   * cashier retrying a sale the server had already recorded — double stock
+   * decrement, double revenue, and both showing in the dashboard as real.
+   */
+  idempotencyKey: z.uuid().optional(),
 });
 
 export type CompleteSaleResult = { code: string; total: number };
 
+/**
+ * `pos.use` rings up a sale. An *override* is something else: it writes
+ * recorded stock upward to cover a line the system says isn't there, which is
+ * exactly the act `inventory.adjust` exists to gate. Without this check the
+ * register quietly routed around the permission split — an account trusted
+ * only to sell could move inventory arbitrarily by claiming an override, and
+ * shrinkage became indistinguishable from a miscount in the movement log.
+ */
 export async function completeSale(input: unknown): Promise<ServiceResult<CompleteSaleResult>> {
   const auth = await requirePermission("pos.use");
   if (!auth.ok) return auth;
 
-  return completeSaleCore(input, auth.data.id, await getPosMessages());
+  const messages = await getPosMessages();
+  const wantsOverride =
+    !!input &&
+    typeof input === "object" &&
+    Array.isArray((input as { lines?: unknown }).lines) &&
+    (input as { lines: unknown[] }).lines.some(
+      (line) => !!line && typeof line === "object" && (line as { overridden?: unknown }).overridden === true,
+    );
+
+  if (wantsOverride && !can(auth.data, "inventory.adjust")) {
+    return { ok: false, error: { code: "FORBIDDEN", message: messages.overrideForbidden } };
+  }
+
+  return completeSaleCore(input, auth.data.id, messages);
 }
 
 type ResolvedSaleLine = {
@@ -455,11 +524,22 @@ type ResolvedSaleLine = {
 };
 
 /**
+ * Every stock write this sale has actually landed, in order, so any exit path
+ * can put all of them back. Tracking only the *decrements* left two holes: an
+ * override's upward `correction` was never reversed when the decrement that
+ * followed it failed (inventing stock), and a thrown error skipped the
+ * compensation entirely (losing it).
+ */
+type AppliedAdjustment = { line: StockLine; qty: number; direction: "up" | "down" };
+
+/**
  * Non-backorder line short on recorded stock: the physical item exists (it
  * was just rung up at the counter), so an explicit staff override corrects
  * the count up to exactly what's needed — a `correction` movement, noted as
  * such (task 14: "logged as a `correction` context on the movement note") —
- * before the normal atomic decrement, which is then guaranteed to clear.
+ * before the normal atomic decrement. Both writes are recorded in `applied`
+ * as they land, because the decrement can still lose a race with another
+ * register and the correction has to come back out with it.
  * Returns `false` only when the line wasn't overridden and stock is short.
  */
 async function decrementOrCorrect(
@@ -467,12 +547,9 @@ async function decrementOrCorrect(
   overridden: boolean,
   orderId: string,
   actorId: string,
+  applied: AppliedAdjustment[],
 ): Promise<boolean> {
-  if (line.allowBackorder) {
-    return decrementStockLine(line, orderId, actorId, "pos_sale");
-  }
-
-  if (overridden) {
+  if (!line.allowBackorder && overridden) {
     const [currentQty] = line.usesVariantStock
       ? await db.select({ q: productVariants.stockQty }).from(productVariants).where(eq(productVariants.id, line.variantId!)).limit(1)
       : await db.select({ q: products.stockQty }).from(products).where(eq(products.id, line.productId)).limit(1);
@@ -488,10 +565,53 @@ async function decrementOrCorrect(
         "correction",
         "POS override: recorded stock corrected to match a completed counter sale",
       );
+      applied.push({ line, qty: shortfall, direction: "up" });
     }
   }
 
-  return decrementStockLine(line, orderId, actorId, "pos_sale");
+  const ok = await decrementStockLine(line, orderId, actorId, "pos_sale");
+  if (ok) applied.push({ line, qty: line.qty, direction: "down" });
+  return ok;
+}
+
+/**
+ * Undoes the ledger, newest first. Each reversal is independently guarded:
+ * one failure must not abandon the rest, since every entry left un-reversed is
+ * a permanent drift in recorded stock. Reversing an upward correction is
+ * itself unconditional (`allowBackorder: true`) — it is our own increment
+ * coming back out, not a sale that has to respect a floor.
+ */
+async function reverseAdjustments(
+  applied: AppliedAdjustment[],
+  orderId: string,
+  actorId: string,
+): Promise<void> {
+  for (const adjustment of [...applied].reverse()) {
+    const line = { ...adjustment.line, qty: adjustment.qty };
+    try {
+      if (adjustment.direction === "down") {
+        await incrementStockLine(line, orderId, actorId, "correction", "POS sale rolled back");
+      } else {
+        await decrementStockLine(
+          { ...line, allowBackorder: true },
+          orderId,
+          actorId,
+          "correction",
+          "POS override rolled back",
+        );
+      }
+    } catch (error) {
+      logger.error("POS stock rollback failed — recorded stock may have drifted", {
+        code: "INTERNAL",
+        orderId,
+        productId: adjustment.line.productId,
+        variantId: adjustment.line.variantId,
+        qty: adjustment.qty,
+        direction: adjustment.direction,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 /** All-or-nothing across the whole sale, same shape as `orders.ts`'s own `decrementStockLines` — loads each top-level line's stock units separately (rather than one batched `loadStockLines` call) so a bundle's expanded component units keep that line's own `overridden` flag. */
@@ -500,18 +620,21 @@ async function applySaleStock(
   orderId: string,
   actorId: string,
 ): Promise<string | null> {
-  const applied: StockLine[] = [];
+  const applied: AppliedAdjustment[] = [];
 
-  for (const { source, overridden } of lines) {
-    const stockLines = await loadStockLines([source]);
-    for (const line of stockLines) {
-      const ok = await decrementOrCorrect(line, overridden, orderId, actorId);
-      if (!ok) {
-        for (const done of applied) await incrementStockLine(done, orderId, actorId, "correction");
-        return source.nameSnapshot;
+  try {
+    for (const { source, overridden } of lines) {
+      const stockLines = await loadStockLines([source]);
+      for (const line of stockLines) {
+        if (!(await decrementOrCorrect(line, overridden, orderId, actorId, applied))) {
+          await reverseAdjustments(applied, orderId, actorId);
+          return source.nameSnapshot;
+        }
       }
-      applied.push(line);
     }
+  } catch (error) {
+    await reverseAdjustments(applied, orderId, actorId);
+    throw error;
   }
 
   return null;
@@ -526,6 +649,17 @@ async function applySaleStock(
  * price or name is trusted from the client — every line is re-resolved here,
  * the same discipline `createOrderCore` uses for the storefront.
  */
+/** The already-recorded sale for this key, if the register is retrying. */
+async function findSaleByIdempotencyKey(idempotencyKey: string): Promise<CompleteSaleResult | null> {
+  const [order] = await db
+    .select({ code: orders.code, total: orders.total })
+    .from(orders)
+    .where(eq(orders.idempotencyKey, idempotencyKey))
+    .limit(1);
+
+  return order ?? null;
+}
+
 export async function completeSaleCore(
   input: unknown,
   actorId: string,
@@ -534,6 +668,11 @@ export async function completeSaleCore(
   const parsed = completeSaleSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
   const data = parsed.data;
+
+  if (data.idempotencyKey) {
+    const existing = await findSaleByIdempotencyKey(data.idempotencyKey);
+    if (existing) return { ok: true, data: existing };
+  }
 
   const productIds = [...new Set(data.lines.filter((l) => l.kind === "product").map((l) => l.productId!))];
   const variantIds = [...new Set(data.lines.filter((l) => l.kind === "product" && l.variantId).map((l) => l.variantId!))];
@@ -553,6 +692,21 @@ export async function completeSaleCore(
   const unavailable: string[] = [];
   const resolved: ResolvedSaleLine[] = [];
 
+  // One promotion query for the whole basket, not one per line.
+  const prices = await getEffectivePrices(
+    [
+      ...productRows.map((row): PricingItem => ({
+        kind: "product",
+        id: row.id,
+        price: row.price,
+        discountPrice: row.discountPrice,
+      })),
+      ...bundleRows.map((row): PricingItem => ({ kind: "bundle", id: row.id, price: row.price })),
+    ],
+    "pos",
+    now,
+  );
+
   for (const line of data.lines) {
     if (line.kind === "product") {
       const product = productById.get(line.productId!);
@@ -569,11 +723,7 @@ export async function completeSaleCore(
         }
       }
 
-      const effective = await getEffectivePrice(
-        { kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice },
-        "pos",
-        now,
-      );
+      const effective = prices.get(product.id) ?? { price: product.price };
       const productName = localized(data.locale, product.nameAr, product.nameFr);
       resolved.push({
         kind: "product",
@@ -593,7 +743,7 @@ export async function completeSaleCore(
         continue;
       }
 
-      const effective = await getEffectivePrice({ kind: "bundle", id: bundle.id, price: bundle.price }, "pos", now);
+      const effective = prices.get(bundle.id) ?? { price: bundle.price };
       resolved.push({
         kind: "bundle",
         productId: null,
@@ -616,22 +766,32 @@ export async function completeSaleCore(
   const total = resolved.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
   const discountTotal = subtotal - total;
 
-  const created = await insertWithUniqueOrderCode(now, (code) =>
-    db
-      .insert(orders)
-      .values({
-        code,
-        source: "pos",
-        status: "delivered",
-        paymentMethod: data.paymentMethod,
-        subtotal,
-        discountTotal,
-        total,
-        createdBy: actorId,
-      })
-      .returning({ id: orders.id, code: orders.code })
-      .then(([row]) => row),
-  );
+  let created: { id: string; code: string };
+  try {
+    created = await insertWithUniqueOrderCode(now, (code) =>
+      db
+        .insert(orders)
+        .values({
+          code,
+          source: "pos",
+          status: "delivered",
+          paymentMethod: data.paymentMethod,
+          subtotal,
+          discountTotal,
+          total,
+          createdBy: actorId,
+          idempotencyKey: data.idempotencyKey ?? null,
+        })
+        .returning({ id: orders.id, code: orders.code })
+        .then(([row]) => row),
+    );
+  } catch (error) {
+    if (data.idempotencyKey && isUniqueViolation(error, "orders_idempotency_key_unique")) {
+      const existing = await findSaleByIdempotencyKey(data.idempotencyKey);
+      if (existing) return { ok: true, data: existing };
+    }
+    throw error;
+  }
 
   try {
     await db.insert(orderItems).values(

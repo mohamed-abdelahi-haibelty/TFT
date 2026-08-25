@@ -64,6 +64,7 @@ export type LabelPickerItem = {
   nameFr: string;
   price: number;
   categoryId: string | null;
+  categoryNameAr: string | null;
   categoryNameFr: string | null;
 };
 
@@ -76,7 +77,8 @@ export async function listLabelItems(): Promise<ServiceResult<LabelPickerItem[]>
 }
 
 export async function listLabelItemsCore(): Promise<LabelPickerItem[]> {
-  const productRows = await db
+  const [productRows, variantRows, bundleRows] = await Promise.all([
+    db
     .select({
       id: products.id,
       sku: products.sku,
@@ -85,14 +87,15 @@ export async function listLabelItemsCore(): Promise<LabelPickerItem[]> {
       price: products.price,
       discountPrice: products.discountPrice,
       categoryId: products.categoryId,
+      categoryNameAr: categories.nameAr,
       categoryNameFr: categories.nameFr,
     })
     .from(products)
     .innerJoin(categories, eq(products.categoryId, categories.id))
     .where(eq(products.isActive, true))
-    .orderBy(asc(products.nameFr));
+    .orderBy(asc(products.nameFr)),
 
-  const variantRows = await db
+    db
     .select({
       id: productVariants.id,
       sku: productVariants.sku,
@@ -103,25 +106,27 @@ export async function listLabelItemsCore(): Promise<LabelPickerItem[]> {
       price: products.price,
       discountPrice: products.discountPrice,
       categoryId: products.categoryId,
+      categoryNameAr: categories.nameAr,
       categoryNameFr: categories.nameFr,
     })
     .from(productVariants)
     .innerJoin(products, eq(productVariants.productId, products.id))
     .innerJoin(categories, eq(products.categoryId, categories.id))
     .where(and(eq(productVariants.isActive, true), eq(products.isActive, true)))
-    .orderBy(asc(products.nameFr));
+    .orderBy(asc(products.nameFr)),
 
-  const bundleRows = await db
-    .select({
-      id: bundles.id,
-      sku: bundles.sku,
-      nameAr: bundles.nameAr,
-      nameFr: bundles.nameFr,
-      price: bundles.price,
-    })
-    .from(bundles)
-    .where(eq(bundles.isActive, true))
-    .orderBy(asc(bundles.nameFr));
+    db
+      .select({
+        id: bundles.id,
+        sku: bundles.sku,
+        nameAr: bundles.nameAr,
+        nameFr: bundles.nameFr,
+        price: bundles.price,
+      })
+      .from(bundles)
+      .where(eq(bundles.isActive, true))
+      .orderBy(asc(bundles.nameFr)),
+  ]);
 
   return [
     ...productRows.map((p) => ({
@@ -132,6 +137,7 @@ export async function listLabelItemsCore(): Promise<LabelPickerItem[]> {
       nameFr: p.nameFr,
       price: p.discountPrice ?? p.price,
       categoryId: p.categoryId,
+      categoryNameAr: p.categoryNameAr,
       categoryNameFr: p.categoryNameFr,
     })),
     ...variantRows.map((v) => ({
@@ -142,6 +148,7 @@ export async function listLabelItemsCore(): Promise<LabelPickerItem[]> {
       nameFr: `${v.productNameFr} — ${v.nameFr}`,
       price: v.discountPrice ?? v.price,
       categoryId: v.categoryId,
+      categoryNameAr: v.categoryNameAr,
       categoryNameFr: v.categoryNameFr,
     })),
     ...bundleRows.map((b) => ({
@@ -152,6 +159,7 @@ export async function listLabelItemsCore(): Promise<LabelPickerItem[]> {
       nameFr: b.nameFr,
       price: b.price,
       categoryId: null,
+      categoryNameAr: null,
       categoryNameFr: null,
     })),
   ];

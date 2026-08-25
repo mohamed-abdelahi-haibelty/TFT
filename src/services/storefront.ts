@@ -13,7 +13,8 @@ import {
   variantImages,
 } from "@/src/db/schema";
 import { deriveMaxSellable, type AvailabilityComponent } from "@/src/lib/bundle-availability";
-import { getEffectivePrice, type EffectivePrice } from "@/src/services/pricing";
+import { containsTerm } from "@/src/lib/search";
+import { getEffectivePrices, type EffectivePrice, type PricingItem } from "@/src/services/pricing";
 
 /**
  * Public, unauthenticated reads for the storefront (customer-facing, no
@@ -28,7 +29,21 @@ import { getEffectivePrice, type EffectivePrice } from "@/src/services/pricing";
  * `next/headers()` call can't run under Vitest — so like every other
  * `src/services/*` module, the real query logic lives in an exported
  * `*Core` function tests call directly, uncached.
+ *
+ * Every promo-sensitive entry also carries a `revalidate`. Tag invalidation
+ * alone covers *mutations*, but a promotion starting or ending is a clock
+ * event that no mutation accompanies — without a TTL a cached page kept
+ * quoting a discount after `ends_at` (and never picked one up at `starts_at`),
+ * while `createOrderCore` re-priced against the real clock and charged
+ * something else.
  */
+
+/**
+ * Upper bound on how long a storefront price may lag the promotion calendar.
+ * Short enough that nobody is quoted a dead discount for long, long enough
+ * that the catalog is still served from cache under any realistic traffic.
+ */
+export const STOREFRONT_REVALIDATE_SECONDS = 60;
 
 export type StorefrontCategory = {
   id: string;
@@ -63,6 +78,13 @@ export type StorefrontProductCard = {
   image: string | null;
   basePrice: number;
   effectivePrice: number;
+  /**
+   * What this item costs once `promo` has run out — its standing
+   * `discount_price` when it has one, otherwise `basePrice`. The client ticks
+   * the promo clock itself, and without this it fell back to `basePrice` and
+   * quoted the *undiscounted* price for every permanently-discounted product.
+   */
+  postPromoPrice: number;
   promo: StorefrontPromo | null;
   stockQty: number;
   allowBackorder: boolean;
@@ -112,33 +134,50 @@ function toPromo(effective: EffectivePrice): StorefrontPromo | null {
   return effective.promo ?? null;
 }
 
-/** Shared row → card hydration (images + the one authoritative pricing call) for every product-card listing. */
-async function hydrateProductCards(rows: ProductCardRow[]): Promise<StorefrontProductCard[]> {
-  const images = await firstImagesByProduct(rows.map((row) => row.id));
-  const now = new Date();
+/** The price a promo-expiring client should fall back to — never the bare list price when a `discount_price` stands. */
+function postPromoPrice(price: number, discountPrice: number | null): number {
+  return discountPrice ?? price;
+}
 
-  return Promise.all(
-    rows.map(async (row) => {
-      const effective = await getEffectivePrice(
-        { kind: "product", id: row.id, price: row.price, discountPrice: row.discountPrice },
-        "web",
-        now,
-      );
-      return {
+/**
+ * Shared row → card hydration (images + the one authoritative pricing call)
+ * for every product-card listing. Prices resolve through `getEffectivePrices`,
+ * the batched sibling: one promotion query for the whole page instead of one
+ * per row, which at `CATALOG_MAX_RESULTS` was up to 200 round trips against a
+ * serverless database per cache fill.
+ */
+async function hydrateProductCards(rows: ProductCardRow[]): Promise<StorefrontProductCard[]> {
+  const [images, prices] = await Promise.all([
+    firstImagesByProduct(rows.map((row) => row.id)),
+    getEffectivePrices(
+      rows.map((row): PricingItem => ({
+        kind: "product",
         id: row.id,
-        nameAr: row.nameAr,
-        nameFr: row.nameFr,
-        slug: row.slug,
-        categorySlug: row.categorySlug,
-        image: images.get(row.id) ?? null,
-        basePrice: row.price,
-        effectivePrice: effective.price,
-        promo: toPromo(effective),
-        stockQty: row.stockQty,
-        allowBackorder: row.allowBackorder,
-      };
-    }),
-  );
+        price: row.price,
+        discountPrice: row.discountPrice,
+      })),
+      "web",
+      new Date(),
+    ),
+  ]);
+
+  return rows.map((row) => {
+    const effective = prices.get(row.id) ?? { price: row.price, base: row.price };
+    return {
+      id: row.id,
+      nameAr: row.nameAr,
+      nameFr: row.nameFr,
+      slug: row.slug,
+      categorySlug: row.categorySlug,
+      image: images.get(row.id) ?? null,
+      basePrice: row.price,
+      effectivePrice: effective.price,
+      postPromoPrice: postPromoPrice(row.price, row.discountPrice),
+      promo: toPromo(effective),
+      stockQty: row.stockQty,
+      allowBackorder: row.allowBackorder,
+    };
+  });
 }
 
 export async function getFeaturedProductsCore(limit = 8): Promise<StorefrontProductCard[]> {
@@ -155,6 +194,7 @@ export async function getFeaturedProductsCore(limit = 8): Promise<StorefrontProd
 
 export const getFeaturedProducts = unstable_cache(getFeaturedProductsCore, ["storefront-featured-products"], {
   tags: ["products"],
+  revalidate: STOREFRONT_REVALIDATE_SECONDS,
 });
 
 export type CatalogSort = "newest" | "price-asc" | "price-desc";
@@ -176,10 +216,8 @@ const CATALOG_MAX_RESULTS = 200;
 export async function listCatalogProductsCore(filters: CatalogFilters): Promise<StorefrontProductCard[]> {
   const conditions: SQL[] = [eq(products.isActive, true)];
   if (filters.categorySlug) conditions.push(eq(categories.slug, filters.categorySlug));
-  if (filters.search?.trim()) {
-    const term = `%${filters.search.trim()}%`;
-    conditions.push(or(ilike(products.nameFr, term), ilike(products.nameAr, term))!);
-  }
+  const term = containsTerm(filters.search);
+  if (term) conditions.push(or(ilike(products.nameFr, term), ilike(products.nameAr, term))!);
   if (filters.minPrice != null) conditions.push(gte(products.price, filters.minPrice));
   if (filters.maxPrice != null) conditions.push(lte(products.price, filters.maxPrice));
   if (filters.inStockOnly) conditions.push(or(gt(products.stockQty, 0), eq(products.allowBackorder, true))!);
@@ -203,9 +241,23 @@ export async function listCatalogProductsCore(filters: CatalogFilters): Promise<
   return cards;
 }
 
-export const listCatalogProducts = unstable_cache(listCatalogProductsCore, ["storefront-catalog-products"], {
+const listCatalogProductsCached = unstable_cache(listCatalogProductsCore, ["storefront-catalog-products"], {
   tags: ["products"],
+  revalidate: STOREFRONT_REVALIDATE_SECONDS,
 });
+
+/**
+ * `unstable_cache` derives its key from the arguments, so caching a filter
+ * object carrying raw `?q=` / `?min=` / `?max=` values mints one permanent
+ * entry — each holding a fully hydrated product list — per distinct query
+ * string a visitor can invent. Category, stock and sort are a small closed
+ * set and stay cached; free text and price ranges are unbounded in
+ * cardinality, and at this catalog size they are cheap to run uncached.
+ */
+export async function listCatalogProducts(filters: CatalogFilters): Promise<StorefrontProductCard[]> {
+  const isBounded = !filters.search?.trim() && filters.minPrice == null && filters.maxPrice == null;
+  return isBounded ? listCatalogProductsCached(filters) : listCatalogProductsCore(filters);
+}
 
 export type StorefrontVariant = {
   id: string;
@@ -230,6 +282,8 @@ export type StorefrontProductDetail = {
   categoryNameFr: string;
   basePrice: number;
   effectivePrice: number;
+  /** See `StorefrontProductCard.postPromoPrice`. */
+  postPromoPrice: number;
   promo: StorefrontPromo | null;
   stockQty: number;
   allowBackorder: boolean;
@@ -299,11 +353,12 @@ export async function getStorefrontProductBySlugCore(slug: string): Promise<Stor
     images: variantImageRows.filter((img) => img.variantId === variant.id).map((img) => img.publicId),
   }));
 
-  const effective = await getEffectivePrice(
-    { kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice },
+  const prices = await getEffectivePrices(
+    [{ kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice }],
     "web",
     new Date(),
   );
+  const effective = prices.get(product.id) ?? { price: product.price, base: product.price };
 
   return {
     id: product.id,
@@ -318,6 +373,7 @@ export async function getStorefrontProductBySlugCore(slug: string): Promise<Stor
     categoryNameFr: product.categoryNameFr,
     basePrice: product.price,
     effectivePrice: effective.price,
+    postPromoPrice: postPromoPrice(product.price, product.discountPrice),
     promo: toPromo(effective),
     stockQty: product.stockQty,
     allowBackorder: product.allowBackorder,
@@ -330,7 +386,10 @@ export async function getStorefrontProductBySlugCore(slug: string): Promise<Stor
 // (`generateMetadata` + the page body) into a single query round-trip;
 // `unstable_cache` alone only dedupes across requests, not within one.
 export const getStorefrontProductBySlug = cache(
-  unstable_cache(getStorefrontProductBySlugCore, ["storefront-product-detail"], { tags: ["products"] }),
+  unstable_cache(getStorefrontProductBySlugCore, ["storefront-product-detail"], {
+    tags: ["products"],
+    revalidate: STOREFRONT_REVALIDATE_SECONDS,
+  }),
 );
 
 export type StorefrontBundleCard = {
@@ -366,25 +425,29 @@ export async function getHomeBundlesCore(limit = 6): Promise<StorefrontBundleCar
     .orderBy(desc(bundles.createdAt))
     .limit(limit);
 
-  const images = await firstImagesByBundle(rows.map((row) => row.id));
-  const now = new Date();
+  const [images, prices] = await Promise.all([
+    firstImagesByBundle(rows.map((row) => row.id)),
+    getEffectivePrices(
+      rows.map((row): PricingItem => ({ kind: "bundle", id: row.id, price: row.price })),
+      "web",
+      new Date(),
+    ),
+  ]);
 
-  return Promise.all(
-    rows.map(async (row) => {
-      const effective = await getEffectivePrice({ kind: "bundle", id: row.id, price: row.price }, "web", now);
-      return {
-        id: row.id,
-        nameAr: row.nameAr,
-        nameFr: row.nameFr,
-        slug: row.slug,
-        image: images.get(row.id) ?? null,
-        effectivePrice: effective.price,
-      };
-    }),
-  );
+  return rows.map((row) => ({
+    id: row.id,
+    nameAr: row.nameAr,
+    nameFr: row.nameFr,
+    slug: row.slug,
+    image: images.get(row.id) ?? null,
+    effectivePrice: (prices.get(row.id) ?? { price: row.price }).price,
+  }));
 }
 
-export const getHomeBundles = unstable_cache(getHomeBundlesCore, ["storefront-home-bundles"], { tags: ["bundles"] });
+export const getHomeBundles = unstable_cache(getHomeBundlesCore, ["storefront-home-bundles"], {
+  tags: ["bundles"],
+  revalidate: STOREFRONT_REVALIDATE_SECONDS,
+});
 
 export type StorefrontBundleListCard = StorefrontBundleCard & {
   itemCount: number;
@@ -450,32 +513,39 @@ export async function listCatalogBundlesCore(): Promise<StorefrontBundleListCard
     .limit(CATALOG_BUNDLES_MAX_RESULTS);
 
   const bundleIds = rows.map((row) => row.id);
-  const [images, availability] = await Promise.all([firstImagesByBundle(bundleIds), bundleAvailabilityByBundle(bundleIds)]);
-  const now = new Date();
+  const [images, availability, prices] = await Promise.all([
+    firstImagesByBundle(bundleIds),
+    bundleAvailabilityByBundle(bundleIds),
+    getEffectivePrices(
+      rows.map((row): PricingItem => ({ kind: "bundle", id: row.id, price: row.price })),
+      "web",
+      new Date(),
+    ),
+  ]);
 
-  return Promise.all(
-    rows.map(async (row) => {
-      const effective = await getEffectivePrice({ kind: "bundle", id: row.id, price: row.price }, "web", now);
-      const avail = availability.get(row.id) ?? { maxSellable: 0, itemCount: 0 };
-      return {
-        id: row.id,
-        nameAr: row.nameAr,
-        nameFr: row.nameFr,
-        slug: row.slug,
-        image: images.get(row.id) ?? null,
-        effectivePrice: effective.price,
-        itemCount: avail.itemCount,
-        maxSellable: avail.maxSellable,
-      };
-    }),
-  );
+  return rows.map((row) => {
+    const avail = availability.get(row.id) ?? { maxSellable: 0, itemCount: 0 };
+    return {
+      id: row.id,
+      nameAr: row.nameAr,
+      nameFr: row.nameFr,
+      slug: row.slug,
+      image: images.get(row.id) ?? null,
+      effectivePrice: (prices.get(row.id) ?? { price: row.price }).price,
+      itemCount: avail.itemCount,
+      maxSellable: avail.maxSellable,
+    };
+  });
 }
 
 export const listCatalogBundles = unstable_cache(listCatalogBundlesCore, ["storefront-catalog-bundles"], {
   tags: ["bundles"],
+  revalidate: STOREFRONT_REVALIDATE_SECONDS,
 });
 
 export type StorefrontBundleItem = {
+  /** `bundle_items.id` — the only stable identity for a component row, since the same product may legitimately appear twice in one box. */
+  id: string;
   productId: string;
   productSlug: string;
   nameAr: string;
@@ -497,6 +567,8 @@ export type StorefrontBundleDetail = {
   images: string[];
   basePrice: number;
   effectivePrice: number;
+  /** See `StorefrontProductCard.postPromoPrice`. A bundle has no standing discount column, so this is always its list price. */
+  postPromoPrice: number;
   promo: StorefrontPromo | null;
   maxSellable: number | null;
   items: StorefrontBundleItem[];
@@ -529,6 +601,7 @@ export async function getStorefrontBundleBySlugCore(slug: string): Promise<Store
       .orderBy(asc(bundleImages.sort)),
     db
       .select({
+        id: bundleItems.id,
         qty: bundleItems.qty,
         productId: products.id,
         productSlug: products.slug,
@@ -551,25 +624,33 @@ export async function getStorefrontBundleBySlugCore(slug: string): Promise<Store
 
   const now = new Date();
 
-  const items: StorefrontBundleItem[] = await Promise.all(
-    itemRows.map(async (row) => {
-      const effective = await getEffectivePrice(
-        { kind: "product", id: row.productId, price: row.productPrice, discountPrice: row.productDiscountPrice },
-        "web",
-        now,
-      );
-      return {
-        productId: row.productId,
-        productSlug: row.productSlug,
-        nameAr: row.productNameAr,
-        nameFr: row.productNameFr,
-        variantNameAr: row.variantNameAr,
-        variantNameFr: row.variantNameFr,
-        qty: row.qty,
-        unitPrice: effective.price,
-      };
-    }),
+  // One query for the whole manifest plus the box itself, rather than one per
+  // component — the same batched call every other listing here now uses.
+  const prices = await getEffectivePrices(
+    [
+      ...itemRows.map((row): PricingItem => ({
+        kind: "product",
+        id: row.productId,
+        price: row.productPrice,
+        discountPrice: row.productDiscountPrice,
+      })),
+      { kind: "bundle", id: bundle.id, price: bundle.price },
+    ],
+    "web",
+    now,
   );
+
+  const items: StorefrontBundleItem[] = itemRows.map((row) => ({
+    id: row.id,
+    productId: row.productId,
+    productSlug: row.productSlug,
+    nameAr: row.productNameAr,
+    nameFr: row.productNameFr,
+    variantNameAr: row.variantNameAr,
+    variantNameFr: row.variantNameFr,
+    qty: row.qty,
+    unitPrice: (prices.get(row.productId) ?? { price: row.productPrice }).price,
+  }));
 
   const componentPriceSum = items.reduce((sum, item) => sum + item.unitPrice * item.qty, 0);
 
@@ -579,7 +660,7 @@ export async function getStorefrontBundleBySlugCore(slug: string): Promise<Store
     allowBackorder: row.allowBackorder,
   }));
 
-  const effectiveBundle = await getEffectivePrice({ kind: "bundle", id: bundle.id, price: bundle.price }, "web", now);
+  const effectiveBundle = prices.get(bundle.id) ?? { price: bundle.price, base: bundle.price };
 
   return {
     id: bundle.id,
@@ -591,6 +672,7 @@ export async function getStorefrontBundleBySlugCore(slug: string): Promise<Store
     images: imageRows.map((row) => row.publicId),
     basePrice: bundle.price,
     effectivePrice: effectiveBundle.price,
+    postPromoPrice: bundle.price,
     promo: toPromo(effectiveBundle),
     maxSellable: deriveMaxSellable(components),
     items,
@@ -601,7 +683,10 @@ export async function getStorefrontBundleBySlugCore(slug: string): Promise<Store
 // See `getStorefrontProductBySlug`'s own comment: `cache()` dedupes
 // `generateMetadata` + the page body into one query round-trip per request.
 export const getStorefrontBundleBySlug = cache(
-  unstable_cache(getStorefrontBundleBySlugCore, ["storefront-bundle-detail"], { tags: ["bundles"] }),
+  unstable_cache(getStorefrontBundleBySlugCore, ["storefront-bundle-detail"], {
+    tags: ["bundles"],
+    revalidate: STOREFRONT_REVALIDATE_SECONDS,
+  }),
 );
 
 export type SitemapCatalog = {

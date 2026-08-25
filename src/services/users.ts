@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db } from "@/src/db/client";
 import { accounts, sessions, users } from "@/src/db/schema";
+import { isUniqueViolation } from "@/src/lib/db-errors";
 import type { ServiceResult } from "@/src/lib/errors";
 import {
   type Permission,
@@ -82,16 +83,26 @@ export async function createStaff(
   // neon-http has no transaction support (one query per HTTP round trip), so
   // this is two sequential writes with a manual rollback of the user row if
   // the credential insert fails, rather than a real atomic transaction.
-  const [created] = await db
-    .insert(users)
-    .values({
-      name: parsed.data.name,
-      email: parsed.data.email,
-      emailVerified: true,
-      role: "staff",
-      isActive: true,
-    })
-    .returning({ id: users.id });
+  let created: { id: string };
+  try {
+    [created] = await db
+      .insert(users)
+      .values({
+        name: parsed.data.name,
+        email: parsed.data.email,
+        emailVerified: true,
+        role: "staff",
+        isActive: true,
+      })
+      .returning({ id: users.id });
+  } catch (error) {
+    // The existence check above is not atomic; two invites for the same
+    // address raced into a raw 23505 instead of "this e-mail is already used".
+    if (isUniqueViolation(error, "users_email_unique")) {
+      return { ok: false, error: { code: "CONFLICT", message: t("emailTaken") } };
+    }
+    throw error;
+  }
 
   try {
     await db.insert(accounts).values({

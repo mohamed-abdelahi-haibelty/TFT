@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { DesktopCartIndicator, MobileCartIndicator } from "@/components/store/cart-indicator";
-import { Link } from "@/src/i18n/navigation";
+import { LocaleSwitch } from "@/components/store/locale-switch";
 import { routing } from "@/src/i18n/routing";
+import { Link } from "@/src/i18n/navigation";
 
 /**
  * Storefront shell nav — "Atelier Blanc": a quiet editorial bar, white on
@@ -51,15 +52,13 @@ export async function SiteHeader({ locale }: { locale: string }) {
             {/* Always visible, not `sm:`-gated — on real phone widths (<640px) that
                 gate hid the only way to switch AR/FR, leaving mobile, the primary
                 audience, with no language control anywhere in the storefront. */}
-            <nav aria-label={t("localeSwitch.ar") + " / " + t("localeSwitch.fr")} className="flex text-xs">
-              <Link
-                href="/"
-                locale={otherLocale}
-                className="flex min-h-11 items-center rounded-[2px] border border-ink px-3 font-medium tracking-[0.04em] text-ink uppercase transition-colors hover:bg-ink hover:text-paper sm:px-3.5"
-              >
-                {t(`localeSwitch.${otherLocale}` as "localeSwitch.ar" | "localeSwitch.fr")}
-              </Link>
-            </nav>
+            {/* Switching language used to send the visitor back to the home
+                page from wherever they were — including mid-checkout. */}
+            <LocaleSwitch
+              locale={otherLocale}
+              label={t(`localeSwitch.${otherLocale}` as "localeSwitch.ar" | "localeSwitch.fr")}
+              navLabel={`${t("localeSwitch.ar")} / ${t("localeSwitch.fr")}`}
+            />
 
             <DesktopCartIndicator label={t("nav.cart")} />
           </div>

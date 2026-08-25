@@ -25,11 +25,13 @@ export default async function TrackPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ code?: string; phone?: string }>;
+  // Only the order code is ever carried in the URL. The phone number is half
+  // of this order's only credential and is typed each time, never linked.
+  searchParams: Promise<{ code?: string }>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const resolvedSearchParams = await searchParams;
+  const { code } = await searchParams;
 
-  return <TrackView locale={locale} code={resolvedSearchParams.code} phone={resolvedSearchParams.phone} />;
+  return <TrackView locale={locale} defaultCode={code} />;
 }

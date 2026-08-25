@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/src/db/client";
 import { categories, orderItems, orders, products } from "@/src/db/schema";
@@ -10,6 +10,31 @@ import { getDashboardStatsCore } from "@/src/services/dashboard";
 // month scoped"), so those are checked by inclusion rather than exact
 // equality against a live dev database that other tests also touch.
 const TEST_MONTH = "2023-06";
+const TEST_MONTH_START = new Date(Date.UTC(2023, 5, 1));
+const TEST_MONTH_END = new Date(Date.UTC(2023, 6, 1));
+
+/**
+ * This suite owns `TEST_MONTH` outright, so it enforces that rather than
+ * assuming it: every order dated inside the window is removed before the
+ * fixtures go in and again after they come out.
+ *
+ * Tracking ids alone was not enough. A run that failed an assertion and then
+ * hit an error partway through its own teardown left three orders behind in
+ * 2023-06, and every later run of this file failed on counts it could not see
+ * the cause of — an exact-count assertion over a shared dev database has to be
+ * able to heal itself.
+ */
+async function purgeTestMonthOrders() {
+  const rows = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(gte(orders.createdAt, TEST_MONTH_START), lt(orders.createdAt, TEST_MONTH_END)));
+
+  if (rows.length === 0) return;
+  const ids = rows.map((row) => row.id);
+  await db.delete(orderItems).where(inArray(orderItems.orderId, ids));
+  await db.delete(orders).where(inArray(orders.id, ids));
+}
 
 describe("dashboard service — month aggregation (task 16)", () => {
   let categoryId: string;
@@ -20,6 +45,8 @@ describe("dashboard service — month aggregation (task 16)", () => {
   const createdProductIds: string[] = [];
 
   beforeAll(async () => {
+    await purgeTestMonthOrders();
+
     const [category] = await db
       .insert(categories)
       .values({ nameAr: "فئة اختبار اللوحة", nameFr: "Categorie test tableau de bord", slug: `dash-test-cat-${Date.now()}` })
@@ -77,6 +104,8 @@ describe("dashboard service — month aggregation (task 16)", () => {
   });
 
   afterAll(async () => {
+    // Month-scoped, not id-scoped, so nothing survives a partial failure.
+    await purgeTestMonthOrders();
     for (const id of createdOrderIds) {
       await db.delete(orderItems).where(eq(orderItems.orderId, id));
       await db.delete(orders).where(eq(orders.id, id));

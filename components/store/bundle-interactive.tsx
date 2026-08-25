@@ -21,6 +21,14 @@ export type BundleInteractiveProps = {
   images: string[];
   basePrice: number;
   effectivePrice: number;
+  /**
+   * What this item costs once the promo clock runs out. Falling back to
+   * `basePrice` here discarded any standing `discount_price`, so a
+   * permanently-discounted product was quoted at its full list price on its
+   * own detail page — above the price its catalog card had just advertised,
+   * and above the price the server actually charges.
+   */
+  postPromoPrice: number;
   promo: { endsAt: string } | null;
   /** `null` = unlimited, `0` = sold out. */
   maxSellable: number | null;
@@ -48,6 +56,7 @@ export function BundleInteractive({
   images,
   basePrice,
   effectivePrice,
+  postPromoPrice,
   promo,
   maxSellable,
   componentPriceSum,
@@ -71,7 +80,7 @@ export function BundleInteractive({
   const activeImage = images[imageIndex] ?? null;
   const disabled = maxSellable === 0;
   const maxQty = maxSellable ?? UNLIMITED_QTY_CAP;
-  const liveEffectivePrice = promo && !promoExpired ? effectivePrice : basePrice;
+  const liveEffectivePrice = promo && !promoExpired ? effectivePrice : postPromoPrice;
   const savings = componentPriceSum - liveEffectivePrice;
 
   useEffect(() => {

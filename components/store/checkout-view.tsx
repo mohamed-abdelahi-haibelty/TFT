@@ -13,6 +13,7 @@ import {
   getCart,
   removeFromCart,
 } from "@/src/lib/cart";
+import { clearLastOrder, readLastOrder, writeLastOrder } from "@/src/lib/last-order";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 import { isValidMauritanianPhone } from "@/src/lib/phone";
@@ -30,7 +31,12 @@ type FormState = {
   note: string;
 };
 
-type FieldErrors = Partial<Record<"name" | "phone" | "city", string>>;
+type FieldErrors = Partial<Record<"name" | "phone" | "city" | "note", string>>;
+
+// Mirrors `createOrderSchema`. Exceeding a server bound with no client bound
+// produced one unattributed "invalid input" at the moment of submit.
+const MAX_NAME_LENGTH = 120;
+const MAX_NOTE_LENGTH = 500;
 
 type ConfirmedOrder = {
   code: string;
@@ -135,7 +141,28 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState<ConfirmedOrder | null>(null);
+  const [confirmedPhone, setConfirmedPhone] = useState("");
   const [copied, setCopied] = useState(false);
+
+  // A refresh — or the OS reclaiming the tab while the customer switches to
+  // WhatsApp — used to destroy the order code outright, and the cart was
+  // already cleared, so there was nothing to re-submit and no way to reach
+  // `/track`. The confirmation is re-read here on mount.
+  useEffect(() => {
+    const stored = readLastOrder();
+    if (!stored) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- rehydrating persisted state on mount is exactly what this effect is for
+    setConfirmed({
+      code: stored.code,
+      customerName: stored.customerName,
+      city: stored.city,
+      items: stored.items,
+      subtotal: stored.subtotal,
+      discountTotal: stored.discountTotal,
+      total: stored.total,
+    });
+    setConfirmedPhone(stored.phone);
+  }, []);
 
   // Submitting with an invalid field used to set state and stop: on a phone
   // the button sits at the page bottom and the first error can be ~600px
@@ -143,7 +170,12 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
   // failed submit move the viewport and the caret to the field at fault.
   const fieldRefs = useRef<Partial<Record<keyof FieldErrors, HTMLElement | null>>>({});
   const errorSummaryRef = useRef<HTMLDivElement | null>(null);
-  const FIELD_ORDER: (keyof FieldErrors)[] = ["name", "phone", "city"];
+  // One key per checkout *attempt*, deliberately not per submit: a retry after
+  // a lost response reuses it, so the server recognises the repeat and returns
+  // the order it already created rather than creating a second one. Cleared
+  // once an attempt genuinely lands.
+  const idempotencyKey = useRef<string | null>(null);
+  const FIELD_ORDER: (keyof FieldErrors)[] = ["name", "phone", "city", "note"];
 
   const whatsappMessage = confirmed
     ? buildWhatsAppOrderMessage({
@@ -165,8 +197,10 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
     if (!form.name.trim()) errors.name = t("errors.nameRequired");
+    else if (form.name.trim().length > MAX_NAME_LENGTH) errors.name = t("errors.nameTooLong");
     if (!isValidMauritanianPhone(form.phone)) errors.phone = t("errors.phoneInvalid");
     if (!form.city) errors.city = t("errors.cityRequired");
+    if (form.note.trim().length > MAX_NOTE_LENGTH) errors.note = t("errors.noteTooLong");
     return errors;
   }
 
@@ -190,12 +224,14 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
     }
 
     setSubmitting(true);
+    idempotencyKey.current ??= crypto.randomUUID();
     try {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           locale,
+          idempotencyKey: idempotencyKey.current,
           customerName: form.name.trim(),
           phone: form.phone,
           city: form.city,
@@ -217,15 +253,40 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
         if (payload?.error?.code === "CONFLICT") {
           const unavailableKeys: string[] = payload.error.details?.unavailableKeys ?? [];
           for (const key of unavailableKeys) removeFromCart(key);
+          // The cart just changed, so the retry is a genuinely different order.
+          idempotencyKey.current = null;
           setFormError(`${t("errors.conflictTitle")} — ${t("errors.conflictBody")}`);
         } else {
+          // The server names the field it rejected, so a bound the client
+          // missed still lands on the right input instead of as a bare
+          // "invalid input" under the button.
+          const field = payload?.error?.details?.field;
+          const mapped: Record<string, keyof FieldErrors> = {
+            customerName: "name",
+            phone: "phone",
+            city: "city",
+            note: "note",
+          };
+          const target = typeof field === "string" ? mapped[field] : undefined;
+          if (target) setFieldErrors((current) => ({ ...current, [target]: t("errors.fieldRejected") }));
           setFormError(payload?.error?.message ?? t("errors.generic"));
         }
         return;
       }
 
+      // The server is the authority on the shape here; anything else means a
+      // response we can't render a confirmation from.
+      if (!payload || typeof payload !== "object" || typeof payload.code !== "string") {
+        setFormError(t("errors.generic"));
+        return;
+      }
+
+      const order = payload as ConfirmedOrder;
+      idempotencyKey.current = null;
       clearCart();
-      setConfirmed(payload as ConfirmedOrder);
+      writeLastOrder({ ...order, phone: form.phone });
+      setConfirmedPhone(form.phone);
+      setConfirmed(order);
     } catch {
       setFormError(t("errors.generic"));
     } finally {
@@ -255,7 +316,20 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
               <span className="font-mono text-lg text-ink">{confirmed.code}</span>
             </div>
             {/* Code + phone is the only credential that will ever retrieve
-                this order, and there are no accounts to fall back on. */}
+                this order, and there are no accounts to fall back on — so the
+                confirmation names the number it was registered against, since
+                that is the half the customer has to remember rather than read
+                back off the screen. */}
+            {confirmedPhone ? (
+              <div className="mt-3 flex items-baseline justify-between">
+                <span className="text-xs font-semibold tracking-[0.04em] text-ink-soft uppercase">
+                  {t("confirmation.phoneLabel")}
+                </span>
+                <span dir="ltr" className="font-mono text-sm text-ink">
+                  +222 {confirmedPhone}
+                </span>
+              </div>
+            ) : null}
             <p className="mt-2 text-xs leading-relaxed text-ink-soft">{t("confirmation.saveCode")}</p>
           </div>
 
@@ -340,7 +414,7 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
               the confirmation used to mention neither. Pre-filling both halves
               of the credential makes the end of the journey one tap. */}
           <Link
-            href={{ pathname: "/track", query: { code: confirmed.code, phone: form.phone } }}
+            href={{ pathname: "/track", query: { code: confirmed.code } }}
             className="mt-6 flex h-12 w-full items-center justify-center rounded-[2px] border border-ink text-xs font-semibold tracking-[0.05em] text-ink uppercase transition-colors hover:bg-ink hover:text-paper"
           >
             {t("confirmation.trackCta")}
@@ -348,6 +422,12 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
 
           <Link
             href="/catalog"
+            onClick={() => {
+              // Leaving for the shop is the customer saying they're done with
+              // this confirmation; keeping it would greet them with a stale
+              // order the next time they open checkout.
+              clearLastOrder();
+            }}
             className="mt-6 inline-flex min-h-11 items-center text-xs font-medium tracking-[0.04em] text-ink underline underline-offset-4 uppercase transition-colors hover:text-plum"
           >
             {t("confirmation.backToShop")}
@@ -467,6 +547,7 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
               }}
               type="text"
               autoComplete="name"
+              maxLength={MAX_NAME_LENGTH}
               value={form.name}
               onChange={(event) => updateField("name", event.target.value)}
               aria-invalid={!!fieldErrors.name}
@@ -582,11 +663,20 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
             </label>
             <textarea
               id="checkout-note"
+              ref={(node) => {
+                fieldRefs.current.note = node;
+              }}
               rows={3}
+              maxLength={MAX_NOTE_LENGTH}
               value={form.note}
               onChange={(event) => updateField("note", event.target.value)}
-              className="mt-2 w-full resize-none rounded-[2px] border border-border bg-transparent px-3.5 py-3 text-base text-ink outline-none focus:border-ink focus-visible:ring-2 focus-visible:ring-ring/50 md:text-sm"
+              aria-invalid={!!fieldErrors.note}
+              aria-describedby={fieldErrors.note ? "checkout-note-error" : undefined}
+              className={`mt-2 w-full resize-none rounded-[2px] border bg-transparent px-3.5 py-3 text-base text-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:text-sm ${
+                fieldErrors.note ? "border-plum" : "border-border focus:border-ink"
+              }`}
             />
+            {fieldErrors.note && <FieldError id="checkout-note-error">{fieldErrors.note}</FieldError>}
           </div>
 
           {formError && (

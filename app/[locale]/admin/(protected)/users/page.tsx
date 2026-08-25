@@ -1,8 +1,10 @@
 import { AlertTriangle, ChevronLeft, ChevronRight, CircleCheck } from "lucide-react";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/src/i18n/navigation";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
+import { AdminLoadError } from "@/components/admin/admin-load-error";
 import { CreateStaffForm } from "@/components/admin/create-staff-form";
 import { UserRowActions } from "@/components/admin/user-row-actions";
 import { firstAllowedSection, hasPermission } from "@/src/lib/permissions";
@@ -28,16 +30,31 @@ export default async function AdminUsersPage({
   setRequestLocale(locale);
 
   const auth = await requireUser();
-  if (!auth.ok) return null;
+  // The protected layout already redirects, so this is a belt-and-braces
+  // path — but it has to lead somewhere. Returning `null` rendered an empty
+  // admin shell with no explanation and no way out.
+  if (!auth.ok) redirect(`/${locale}/admin/login`);
 
   if (!hasPermission(auth.data, "users.manage")) {
     return <AdminForbidden backHref={firstAllowedSection(auth.data) ?? "/admin"} />;
   }
 
   const result = await listUsers();
-  const users = result.ok ? result.data : [];
-
   const t = await getTranslations("admin.users");
+
+  if (!result.ok) {
+    return (
+      <div className="flex flex-col gap-8">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-ink">{t("title")}</h1>
+          <p className="mt-1 text-sm text-ink-soft">{t("subtitle")}</p>
+        </div>
+        <AdminLoadError error={result.error} retryHref="/admin/users" />
+      </div>
+    );
+  }
+
+  const users = result.data;
   const format = await getFormatter();
   const ChevronIcon = locale === "ar" ? ChevronLeft : ChevronRight;
 

@@ -1,12 +1,13 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { localized } from "@/src/lib/locale-text";
 import { formatMoney } from "@/src/lib/money";
 import { addOrderItemAction, removeOrderItemAction, updateOrderItemQtyAction } from "@/src/services/order-actions";
-import type { OrderItemDetail } from "@/src/services/orders";
+import type { OrderItemDetail, OrderItemOption } from "@/src/services/orders";
 
 const fieldClassName =
   "h-9 rounded-md border border-border px-2.5 text-sm text-ink outline-none focus-visible:border-ink focus-visible:ring-3 focus-visible:ring-ink/30";
@@ -27,6 +28,19 @@ function OrderItemRow({
     updateOrderItemQtyAction.bind(null, orderId, item.id),
     null,
   );
+
+  // A refused update left the input showing the attempted quantity while the
+  // server still held the old one — and the Save button enabled, because the
+  // two disagreed. Snap back to what was actually stored.
+  //
+  // Adjusted during render rather than in an effect: this is React's own
+  // "adjusting state when a prop changes" pattern, and it avoids the extra
+  // commit-then-rerender an effect would cost on every failed save.
+  const [seenQtyState, setSeenQtyState] = useState(qtyState);
+  if (qtyState !== seenQtyState) {
+    setSeenQtyState(qtyState);
+    if (qtyState && !qtyState.ok) setQty(item.qty);
+  }
   const [removeState, removeFormAction, removePending] = useActionState(
     removeOrderItemAction.bind(null, orderId, item.id),
     null,
@@ -72,37 +86,41 @@ function OrderItemRow({
   );
 }
 
-type PickerOption = { id: string; nameAr: string; nameFr: string; price: number; sku: string };
-
 function AddItemForm({
   orderId,
-  products,
-  bundles,
+  options,
   t,
 }: {
   orderId: string;
-  products: PickerOption[];
-  bundles: PickerOption[];
+  options: OrderItemOption[];
   t: ReturnType<typeof useTranslations>;
 }) {
+  const locale = useLocale();
   const [state, formAction, pending] = useActionState(addOrderItemAction.bind(null, orderId), null);
   const [kind, setKind] = useState<"product" | "bundle">("product");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
 
-  const options = kind === "product" ? products : bundles;
+  const ofKind = useMemo(() => options.filter((option) => option.kind === kind), [options, kind]);
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return options;
-    return options.filter(
+    if (!term) return ofKind;
+    return ofKind.filter(
       (option) => option.nameFr.toLowerCase().includes(term) || option.nameAr.includes(term) || option.sku.toLowerCase().includes(term),
     );
-  }, [options, search]);
+  }, [ofKind, search]);
+
+  const selected = options.find((option) => option.id === selectedId);
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2 border-t border-border pt-4">
       <input type="hidden" name="kind" value={kind} />
-      <input type="hidden" name={kind === "product" ? "productId" : "bundleId"} value={selectedId} />
+      {/* A variant option carries its own `variantId` alongside its parent's
+          `productId`, so the line decrements the variant's own stock and its
+          snapshot names the colour or size the customer chose. */}
+      <input type="hidden" name="productId" value={selected?.productId ?? ""} />
+      <input type="hidden" name="variantId" value={selected?.variantId ?? ""} />
+      <input type="hidden" name="bundleId" value={selected?.bundleId ?? ""} />
 
       <label className="flex flex-col gap-1 text-xs font-medium text-ink-soft">
         {t("addItem.kindLabel")}
@@ -143,7 +161,7 @@ function AddItemForm({
           <SelectContent>
             {filtered.map((option) => (
               <SelectItem key={option.id} value={option.id}>
-                {option.nameFr} — {formatMoney(option.price)}
+                {localized(locale, option.nameAr, option.nameFr)} — {formatMoney(option.price)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -168,14 +186,15 @@ export function OrderItemsEditor({
   orderId,
   items,
   editable,
-  products,
-  bundles,
+  options,
+  optionsUnavailable = false,
 }: {
   orderId: string;
   items: OrderItemDetail[];
   editable: boolean;
-  products: PickerOption[];
-  bundles: PickerOption[];
+  options: OrderItemOption[];
+  /** The picker data failed to load — say so rather than showing an empty dropdown. */
+  optionsUnavailable?: boolean;
 }) {
   const t = useTranslations("admin.orders.detail");
 
@@ -201,7 +220,15 @@ export function OrderItemsEditor({
         </table>
       </div>
 
-      {editable ? <AddItemForm orderId={orderId} products={products} bundles={bundles} t={t} /> : null}
+      {editable ? (
+        optionsUnavailable ? (
+          <p className="border-t border-border pt-4 text-sm text-plum" role="alert">
+            {t("addItem.unavailable")}
+          </p>
+        ) : (
+          <AddItemForm orderId={orderId} options={options} t={t} />
+        )
+      ) : null}
     </div>
   );
 }

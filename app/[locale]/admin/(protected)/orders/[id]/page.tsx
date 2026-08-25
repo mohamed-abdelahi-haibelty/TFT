@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
@@ -10,9 +10,8 @@ import { formatMoney } from "@/src/lib/money";
 import type { OrderStatusValue } from "@/src/lib/order-tracking";
 import { firstAllowedSection, hasPermission } from "@/src/lib/permissions";
 import { requireUser } from "@/src/services/authz";
-import { listBundles } from "@/src/services/bundles";
-import { getOrderAdmin, type OrderEventDetail } from "@/src/services/orders";
-import { listProducts } from "@/src/services/products";
+import { AdminLoadError } from "@/components/admin/admin-load-error";
+import { getOrderAdmin, listOrderItemOptions, type OrderEventDetail } from "@/src/services/orders";
 
 const STATUS_VALUES: OrderStatusValue[] = [
   "pending",
@@ -93,18 +92,20 @@ export default async function AdminOrderDetailPage({
   setRequestLocale(locale);
 
   const auth = await requireUser();
-  if (!auth.ok) return null;
+  // The protected layout already redirects, so this is a belt-and-braces
+  // path — but it has to lead somewhere. Returning `null` rendered an empty
+  // admin shell with no explanation and no way out.
+  if (!auth.ok) redirect(`/${locale}/admin/login`);
 
   if (!hasPermission(auth.data, "orders.view")) {
     return <AdminForbidden backHref={firstAllowedSection(auth.data) ?? "/admin"} />;
   }
 
-  const [orderResult, productsResult, bundlesResult] = await Promise.all([
-    getOrderAdmin(id),
-    listProducts({ activeOnly: true }),
-    listBundles({ activeOnly: true }),
-  ]);
-  if (!orderResult.ok) notFound();
+  const orderResult = await getOrderAdmin(id);
+  if (!orderResult.ok) {
+    if (orderResult.error.code === "NOT_FOUND") notFound();
+    return <AdminLoadError error={orderResult.error} retryHref={`/admin/orders/${id}`} />;
+  }
 
   const order = orderResult.data;
   const t = await getTranslations("admin.orders");
@@ -122,26 +123,16 @@ export default async function AdminOrderDetailPage({
     numberingSystem: "latn",
   });
 
-  const productOptions = (productsResult.ok ? productsResult.data : []).map((product) => ({
-    id: product.id,
-    nameAr: product.nameAr,
-    nameFr: product.nameFr,
-    price: product.discountPrice ?? product.price,
-    sku: product.sku,
-  }));
-  const bundleOptions = (bundlesResult.ok ? bundlesResult.data : []).map((bundle) => ({
-    id: bundle.id,
-    nameAr: bundle.nameAr,
-    nameFr: bundle.nameFr,
-    price: bundle.price,
-    sku: bundle.sku,
-  }));
-
   // Two independent conditions, deliberately ANDed here rather than inside
   // the editor: the order's status has to allow edits at all, and this
   // operator has to hold `orders.manage`.
   const editable =
     EDITABLE_STATUSES.includes(order.status) && hasPermission(auth.data, "orders.manage");
+
+  // Only fetched when the picker will actually render. This page used to load
+  // and serialise the whole active catalog into the client on every view,
+  // including delivered, cancelled and voided orders that can't be edited.
+  const optionsResult = editable ? await listOrderItemOptions() : null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -199,7 +190,13 @@ export default async function AdminOrderDetailPage({
             </dl>
           </div>
 
-          <OrderItemsEditor orderId={order.id} items={order.items} editable={editable} products={productOptions} bundles={bundleOptions} />
+          <OrderItemsEditor
+            orderId={order.id}
+            items={order.items}
+            editable={editable}
+            options={optionsResult?.ok ? optionsResult.data : []}
+            optionsUnavailable={!!optionsResult && !optionsResult.ok}
+          />
 
           <div className="flex flex-col items-end gap-1 text-sm">
             <p className="text-ink-soft">

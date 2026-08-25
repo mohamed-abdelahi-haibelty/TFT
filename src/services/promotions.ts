@@ -1,10 +1,11 @@
-import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, inArray, or } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db } from "@/src/db/client";
 import { bundles, categories, products, promotionItems, promotions } from "@/src/db/schema";
 import type { ServiceResult } from "@/src/lib/errors";
 import { computePromotionStatus, type PromotionStatus } from "@/src/lib/promotion-status";
+import { containsTerm } from "@/src/lib/search";
 import { requirePermission } from "@/src/services/authz";
 
 export { computePromotionStatus, type PromotionStatus } from "@/src/lib/promotion-status";
@@ -78,8 +79,8 @@ export async function listPromotionsCore(
   now: Date,
 ): Promise<PromotionListItem[]> {
   const conditions = [];
-  if (filters.search) {
-    const term = `%${filters.search.trim()}%`;
+  const term = containsTerm(filters.search);
+  if (term) {
     conditions.push(or(ilike(promotions.nameFr, term), ilike(promotions.nameAr, term)));
   }
 
@@ -340,6 +341,30 @@ export async function togglePromotionActiveCore(id: string, isActive: boolean): 
   return { ok: true, data: { id } };
 }
 
+/**
+ * The largest `fixed` discount currently covering `productId` among live
+ * promotions — what a new price has to stay above, so lowering a price can't
+ * leave a standing promotion resolving that item to nothing.
+ * `null` when no fixed promotion covers it.
+ */
+export async function maxFixedDiscountForProduct(productId: string, now: Date = new Date()): Promise<number | null> {
+  const rows = await db
+    .select({ value: promotions.value })
+    .from(promotionItems)
+    .innerJoin(promotions, eq(promotionItems.promotionId, promotions.id))
+    .where(
+      and(
+        eq(promotionItems.productId, productId),
+        eq(promotions.kind, "fixed"),
+        eq(promotions.isActive, true),
+        gt(promotions.endsAt, now),
+      ),
+    );
+
+  if (!rows.length) return null;
+  return Math.max(...rows.map((row) => row.value));
+}
+
 export type PromotionPickerCategory = { id: string; nameAr: string; nameFr: string };
 export type PromotionPickerProduct = {
   id: string;
@@ -348,6 +373,7 @@ export type PromotionPickerProduct = {
   sku: string;
   price: number;
   categoryId: string;
+  categoryNameAr: string;
   categoryNameFr: string;
 };
 export type PromotionPickerBundle = { id: string; nameAr: string; nameFr: string; sku: string; price: number };
@@ -376,6 +402,7 @@ export async function listPromotionPickerData(): Promise<
         sku: products.sku,
         price: products.price,
         categoryId: products.categoryId,
+        categoryNameAr: categories.nameAr,
         categoryNameFr: categories.nameFr,
       })
       .from(products)

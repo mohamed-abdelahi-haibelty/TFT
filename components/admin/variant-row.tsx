@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { CircleCheck, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,10 @@ export function VariantRow({
   const t = useTranslations("admin.products");
   const router = useRouter();
   const isSaved = !!variant.dbId;
+  // The toggle used to call a `void` action: a refused permission or a failed
+  // write left the row looking untouched.
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [toggling, setToggling] = useState(false);
 
   return (
     <div className="rounded-lg border border-border p-4 sm:p-5">
@@ -118,12 +123,20 @@ export function VariantRow({
               type="button"
               variant="ghost"
               className="h-7 rounded-xs px-3 text-xs"
+              disabled={toggling}
               onClick={async () => {
                 // A <form> here would nest inside ProductForm's own <form>,
                 // which is invalid HTML (browsers reparent it and React 19
                 // then flags the resulting phantom submit) — call the action
                 // directly instead, same fix as the category reorder buttons.
-                await toggleVariantActiveAction(productId, variant.dbId!, !variant.isActive);
+                setToggling(true);
+                setToggleError(null);
+                const result = await toggleVariantActiveAction(productId, variant.dbId!, !variant.isActive);
+                setToggling(false);
+                if (!result.ok) {
+                  setToggleError(result.error.message);
+                  return;
+                }
                 router.refresh();
               }}
             >
@@ -145,6 +158,11 @@ export function VariantRow({
           />
         </div>
       )}
+      {toggleError ? (
+        <p role="alert" className="mt-2 text-xs font-semibold text-plum">
+          {toggleError}
+        </p>
+      ) : null}
       {isSaved ? <p className="mt-2 text-xs text-ink-soft">{t("variantStockLockedHint")}</p> : null}
 
       <div className="mt-4 flex flex-col gap-1.5">
