@@ -1,4 +1,4 @@
-import { eq, like } from "drizzle-orm";
+import { eq, inArray, like, or } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/src/db/client";
 import {
@@ -8,12 +8,14 @@ import {
   orderEvents,
   orderItems,
   orders,
+  productImages,
   productVariants,
   products,
   promotionItems,
   promotions,
   stockMovements,
   users,
+  variantImages,
 } from "@/src/db/schema";
 import { insertWithUniqueSku } from "@/src/lib/sku";
 import { insertWithUniqueOrderCode, orderCodeMonthPrefix } from "@/src/lib/order-code";
@@ -91,6 +93,8 @@ describe("audit regressions", () => {
   }
 
   beforeAll(async () => {
+    await purgeFixtures();
+
     const [category] = await db
       .insert(categories)
       .values({ nameAr: "فئة تراجع", nameFr: "Catégorie regression", slug: `regression-category-${unique()}` })
@@ -104,31 +108,81 @@ describe("audit regressions", () => {
     actorId = actor.id;
   });
 
-  afterAll(async () => {
+  /**
+   * Removes everything this suite creates, found by its own naming prefixes
+   * rather than by a list of tracked ids.
+   *
+   * Tracking ids alone was not enough, and the failure was not hypothetical:
+   * one delete throwing partway through a sequential teardown loop stranded
+   * every row after it, and because this suite runs against the same Neon
+   * branch the deployed site reads, six `isActive` test products ended up on
+   * the live customer catalog and in `sitemap.xml`. Prefix-scoped cleanup on
+   * both sides of the run is what makes that unrecoverable-by-hand outcome
+   * impossible: a crashed run is cleaned by the next one.
+   */
+  async function purgeFixtures() {
+    const leaked = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(or(like(products.slug, "regression-%"), like(products.sku, "REG-P-%")));
+    const productIds = leaked.map((row) => row.id);
+
+    if (productIds.length) {
+      const variantIds = (
+        await db.select({ id: productVariants.id }).from(productVariants).where(inArray(productVariants.productId, productIds))
+      ).map((row) => row.id);
+
+      // `order_items.product_id` is restrict, not cascade, so any order
+      // referencing a fixture product has to go before the product does.
+      const orderIds = [
+        ...new Set(
+          (await db.select({ orderId: orderItems.orderId }).from(orderItems).where(inArray(orderItems.productId, productIds))).map(
+            (row) => row.orderId,
+          ),
+        ),
+      ];
+
+      for (const orderId of orderIds) {
+        await db.delete(stockMovements).where(eq(stockMovements.orderId, orderId));
+        await db.delete(orderEvents).where(eq(orderEvents.orderId, orderId));
+        await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
+        await db.delete(orders).where(eq(orders.id, orderId));
+      }
+
+      if (variantIds.length) {
+        await db.delete(variantImages).where(inArray(variantImages.variantId, variantIds));
+        await db.delete(stockMovements).where(inArray(stockMovements.variantId, variantIds));
+        await db.delete(productVariants).where(inArray(productVariants.id, variantIds));
+      }
+
+      await db.delete(promotionItems).where(inArray(promotionItems.productId, productIds));
+      await db.delete(bundleItems).where(inArray(bundleItems.productId, productIds));
+      await db.delete(productImages).where(inArray(productImages.productId, productIds));
+      await db.delete(stockMovements).where(inArray(stockMovements.productId, productIds));
+      await db.delete(products).where(inArray(products.id, productIds));
+    }
+
     for (const orderId of createdOrderIds) {
       await db.delete(stockMovements).where(eq(stockMovements.orderId, orderId));
       await db.delete(orderEvents).where(eq(orderEvents.orderId, orderId));
       await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
       await db.delete(orders).where(eq(orders.id, orderId));
     }
+
     for (const promotionId of createdPromotionIds) {
       await db.delete(promotionItems).where(eq(promotionItems.promotionId, promotionId));
       await db.delete(promotions).where(eq(promotions.id, promotionId));
     }
-    for (const bundleId of createdBundleIds) {
-      await db.delete(bundleItems).where(eq(bundleItems.bundleId, bundleId));
-      await db.delete(bundles).where(eq(bundles.id, bundleId));
-    }
-    for (const variantId of createdVariantIds) {
-      await db.delete(stockMovements).where(eq(stockMovements.variantId, variantId));
-      await db.delete(productVariants).where(eq(productVariants.id, variantId));
-    }
-    for (const productId of createdProductIds) {
-      await db.delete(stockMovements).where(eq(stockMovements.productId, productId));
-      await db.delete(products).where(eq(products.id, productId));
-    }
-    await db.delete(users).where(eq(users.id, actorId));
-    await db.delete(categories).where(eq(categories.id, categoryId));
+
+    // `bundle_items.bundle_id` cascades, so removing the bundle takes its
+    // component rows with it.
+    await db.delete(bundles).where(like(bundles.slug, "regression-%"));
+    await db.delete(users).where(like(users.email, "regression-%"));
+    await db.delete(categories).where(like(categories.slug, "regression-%"));
+  }
+
+  afterAll(async () => {
+    await purgeFixtures();
   });
 
   // --- C-3: sequences must survive a gap ---------------------------------
