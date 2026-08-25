@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, or, type SQL } from "drizzle-orm";
-import { unstable_cache } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import { db } from "@/src/db/client";
 import {
@@ -19,29 +19,38 @@ import { getEffectivePrices, type EffectivePrice, type PricingItem } from "@/src
 /**
  * Public, unauthenticated reads for the storefront (customer-facing, no
  * permission gate — unlike every other `src/services/*` module). Each
- * exported read is a thin `unstable_cache` wrapper, tagged `"products"` /
+ * exported read is a thin `use cache` wrapper, tagged `"products"` /
  * `"bundles"` / `"categories"` — the exact tags every admin mutation already
  * calls `revalidateTag(..., "max")` with (see product-actions.ts /
  * bundle-actions.ts / category-actions.ts / promotion-actions.ts), so a save
  * in admin invalidates the storefront home on the next request with no extra
- * wiring. `unstable_cache` throws outside a real Next.js request
- * (`Invariant: incrementalCache missing`), the same way `requirePermission`'s
- * `next/headers()` call can't run under Vitest — so like every other
- * `src/services/*` module, the real query logic lives in an exported
- * `*Core` function tests call directly, uncached.
+ * wiring. A `use cache` scope can't run outside a real Next.js render, the
+ * same way `requirePermission`'s `next/headers()` call can't run under Vitest
+ * — so like every other `src/services/*` module, the real query logic lives
+ * in an exported `*Core` function tests call directly, uncached.
  *
- * Every promo-sensitive entry also carries a `revalidate`. Tag invalidation
- * alone covers *mutations*, but a promotion starting or ending is a clock
- * event that no mutation accompanies — without a TTL a cached page kept
- * quoting a discount after `ends_at` (and never picked one up at `starts_at`),
- * while `createOrderCore` re-priced against the real clock and charged
- * something else.
+ * Every promo-sensitive entry carries the `"storefront"` cache profile
+ * (defined in next.config.ts). Tag invalidation alone covers *mutations*, but
+ * a promotion starting or ending is a clock event that no mutation
+ * accompanies — without a bounded lifetime a cached page kept quoting a
+ * discount after `ends_at` (and never picked one up at `starts_at`), while
+ * `createOrderCore` re-priced against the real clock and charged something
+ * else. That profile's `revalidate` is now the *only* thing bounding promo
+ * lag on these reads, since `getEffectivePrices` dates the window in SQL
+ * rather than reading a JS clock these scopes aren't allowed to touch.
+ *
+ * Nothing here may call `getTranslations`: next-intl resolves the locale
+ * through React `cache()`, which `use cache` isolates, so it would fall
+ * through to `headers()` and fail with `next-request-in-use-cache`. Cache
+ * data here; translate in the component.
  */
 
 /**
  * Upper bound on how long a storefront price may lag the promotion calendar.
  * Short enough that nobody is quoted a dead discount for long, long enough
  * that the catalog is still served from cache under any realistic traffic.
+ * Kept as the single source of truth for the `"storefront"` cacheLife profile
+ * in next.config.ts.
  */
 export const STOREFRONT_REVALIDATE_SECONDS = 60;
 
@@ -63,9 +72,12 @@ export async function getStorefrontCategoriesCore(): Promise<StorefrontCategory[
   return db.select(CATEGORY_SELECT).from(categories).orderBy(asc(categories.sort), asc(categories.createdAt));
 }
 
-export const getStorefrontCategories = unstable_cache(getStorefrontCategoriesCore, ["storefront-categories"], {
-  tags: ["categories"],
-});
+export async function getStorefrontCategories(): Promise<StorefrontCategory[]> {
+  "use cache";
+  cacheLife("max");
+  cacheTag("categories");
+  return getStorefrontCategoriesCore();
+}
 
 export type StorefrontPromo = { nameAr: string; nameFr: string; endsAt: Date };
 
@@ -157,7 +169,6 @@ async function hydrateProductCards(rows: ProductCardRow[]): Promise<StorefrontPr
         discountPrice: row.discountPrice,
       })),
       "web",
-      new Date(),
     ),
   ]);
 
@@ -192,10 +203,12 @@ export async function getFeaturedProductsCore(limit = 8): Promise<StorefrontProd
   return hydrateProductCards(rows);
 }
 
-export const getFeaturedProducts = unstable_cache(getFeaturedProductsCore, ["storefront-featured-products"], {
-  tags: ["products"],
-  revalidate: STOREFRONT_REVALIDATE_SECONDS,
-});
+export async function getFeaturedProducts(limit = 8): Promise<StorefrontProductCard[]> {
+  "use cache";
+  cacheLife("storefront");
+  cacheTag("products");
+  return getFeaturedProductsCore(limit);
+}
 
 export type CatalogSort = "newest" | "price-asc" | "price-desc";
 
@@ -241,13 +254,15 @@ export async function listCatalogProductsCore(filters: CatalogFilters): Promise<
   return cards;
 }
 
-const listCatalogProductsCached = unstable_cache(listCatalogProductsCore, ["storefront-catalog-products"], {
-  tags: ["products"],
-  revalidate: STOREFRONT_REVALIDATE_SECONDS,
-});
+async function listCatalogProductsCached(filters: CatalogFilters): Promise<StorefrontProductCard[]> {
+  "use cache";
+  cacheLife("storefront");
+  cacheTag("products");
+  return listCatalogProductsCore(filters);
+}
 
 /**
- * `unstable_cache` derives its key from the arguments, so caching a filter
+ * A `use cache` key is derived from the arguments, so caching a filter
  * object carrying raw `?q=` / `?min=` / `?max=` values mints one permanent
  * entry — each holding a fully hydrated product list — per distinct query
  * string a visitor can invent. Category, stock and sort are a small closed
@@ -356,7 +371,6 @@ export async function getStorefrontProductBySlugCore(slug: string): Promise<Stor
   const prices = await getEffectivePrices(
     [{ kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice }],
     "web",
-    new Date(),
   );
   const effective = prices.get(product.id) ?? { price: product.price, base: product.price };
 
@@ -384,13 +398,15 @@ export async function getStorefrontProductBySlugCore(slug: string): Promise<Stor
 
 // `cache()` dedupes the two calls a product page makes in one request
 // (`generateMetadata` + the page body) into a single query round-trip;
-// `unstable_cache` alone only dedupes across requests, not within one.
-export const getStorefrontProductBySlug = cache(
-  unstable_cache(getStorefrontProductBySlugCore, ["storefront-product-detail"], {
-    tags: ["products"],
-    revalidate: STOREFRONT_REVALIDATE_SECONDS,
-  }),
-);
+// `use cache` alone only dedupes across requests, not within one.
+async function getStorefrontProductBySlugCached(slug: string): Promise<StorefrontProductDetail | null> {
+  "use cache";
+  cacheLife("storefront");
+  cacheTag("products");
+  return getStorefrontProductBySlugCore(slug);
+}
+
+export const getStorefrontProductBySlug = cache(getStorefrontProductBySlugCached);
 
 export type StorefrontBundleCard = {
   id: string;
@@ -430,7 +446,6 @@ export async function getHomeBundlesCore(limit = 6): Promise<StorefrontBundleCar
     getEffectivePrices(
       rows.map((row): PricingItem => ({ kind: "bundle", id: row.id, price: row.price })),
       "web",
-      new Date(),
     ),
   ]);
 
@@ -444,10 +459,12 @@ export async function getHomeBundlesCore(limit = 6): Promise<StorefrontBundleCar
   }));
 }
 
-export const getHomeBundles = unstable_cache(getHomeBundlesCore, ["storefront-home-bundles"], {
-  tags: ["bundles"],
-  revalidate: STOREFRONT_REVALIDATE_SECONDS,
-});
+export async function getHomeBundles(limit = 6): Promise<StorefrontBundleCard[]> {
+  "use cache";
+  cacheLife("storefront");
+  cacheTag("bundles");
+  return getHomeBundlesCore(limit);
+}
 
 export type StorefrontBundleListCard = StorefrontBundleCard & {
   itemCount: number;
@@ -519,7 +536,6 @@ export async function listCatalogBundlesCore(): Promise<StorefrontBundleListCard
     getEffectivePrices(
       rows.map((row): PricingItem => ({ kind: "bundle", id: row.id, price: row.price })),
       "web",
-      new Date(),
     ),
   ]);
 
@@ -538,10 +554,12 @@ export async function listCatalogBundlesCore(): Promise<StorefrontBundleListCard
   });
 }
 
-export const listCatalogBundles = unstable_cache(listCatalogBundlesCore, ["storefront-catalog-bundles"], {
-  tags: ["bundles"],
-  revalidate: STOREFRONT_REVALIDATE_SECONDS,
-});
+export async function listCatalogBundles(): Promise<StorefrontBundleListCard[]> {
+  "use cache";
+  cacheLife("storefront");
+  cacheTag("bundles");
+  return listCatalogBundlesCore();
+}
 
 export type StorefrontBundleItem = {
   /** `bundle_items.id` — the only stable identity for a component row, since the same product may legitimately appear twice in one box. */
@@ -622,8 +640,6 @@ export async function getStorefrontBundleBySlugCore(slug: string): Promise<Store
       .orderBy(asc(bundleItems.createdAt)),
   ]);
 
-  const now = new Date();
-
   // One query for the whole manifest plus the box itself, rather than one per
   // component — the same batched call every other listing here now uses.
   const prices = await getEffectivePrices(
@@ -637,7 +653,6 @@ export async function getStorefrontBundleBySlugCore(slug: string): Promise<Store
       { kind: "bundle", id: bundle.id, price: bundle.price },
     ],
     "web",
-    now,
   );
 
   const items: StorefrontBundleItem[] = itemRows.map((row) => ({
@@ -682,12 +697,14 @@ export async function getStorefrontBundleBySlugCore(slug: string): Promise<Store
 
 // See `getStorefrontProductBySlug`'s own comment: `cache()` dedupes
 // `generateMetadata` + the page body into one query round-trip per request.
-export const getStorefrontBundleBySlug = cache(
-  unstable_cache(getStorefrontBundleBySlugCore, ["storefront-bundle-detail"], {
-    tags: ["bundles"],
-    revalidate: STOREFRONT_REVALIDATE_SECONDS,
-  }),
-);
+async function getStorefrontBundleBySlugCached(slug: string): Promise<StorefrontBundleDetail | null> {
+  "use cache";
+  cacheLife("storefront");
+  cacheTag("bundles");
+  return getStorefrontBundleBySlugCore(slug);
+}
+
+export const getStorefrontBundleBySlug = cache(getStorefrontBundleBySlugCached);
 
 export type SitemapCatalog = {
   categories: { slug: string }[];
@@ -706,6 +723,9 @@ export async function getSitemapCatalogCore(): Promise<SitemapCatalog> {
   return { categories: categoryRows, products: productRows, bundles: bundleRows };
 }
 
-export const getSitemapCatalog = unstable_cache(getSitemapCatalogCore, ["storefront-sitemap-catalog"], {
-  tags: ["categories", "products", "bundles"],
-});
+export async function getSitemapCatalog(): Promise<SitemapCatalog> {
+  "use cache";
+  cacheLife("max");
+  cacheTag("categories", "products", "bundles");
+  return getSitemapCatalogCore();
+}

@@ -63,6 +63,14 @@ export function buildCloudinarySrcSet(publicId: string, sizes: CloudinaryImageSi
  * Cloudinary public_id (not a URL) — wire it via `images.loader: "custom"` /
  * `images.loaderFile` in `next.config.ts`, and pass the public_id as an
  * <Image src>.
+ *
+ * Pads onto a white square, exactly like the five fixed `SIZE_TRANSFORMS`
+ * above, rather than the `c_limit` this used before anything rendered through
+ * it. That is not cosmetic: DESIGN.md's product-imagery rule is a uniform
+ * white plate, and every call site draws the photo into an `aspect-square`
+ * tray with `mix-blend-multiply` to drop that white back out. A `c_limit`
+ * image keeps its own aspect ratio, so it would letterbox inside the tray and
+ * the multiply would have nothing uniform to cancel.
  */
 export function cloudinaryLoader({
   src,
@@ -74,5 +82,5 @@ export function cloudinaryLoader({
   quality?: number;
 }): string {
   const q = quality ?? "auto";
-  return `https://res.cloudinary.com/${requireCloudName()}/image/upload/c_limit,w_${width},q_${q},f_auto/${src}`;
+  return `https://res.cloudinary.com/${requireCloudName()}/image/upload/c_pad,b_white,w_${width},h_${width},q_${q},f_auto/${src}`;
 }

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BundleCard } from "@/components/store/bundle-card";
 import { CategoryChip } from "@/components/store/category-chip";
 import { ProductCard } from "@/components/store/product-card";
+import { ProductImage } from "@/components/store/product-image";
+import { ProductGridSkeleton } from "@/components/store/skeletons";
 import { Link } from "@/src/i18n/navigation";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
@@ -41,46 +44,13 @@ export default async function HomePage({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const [t, categories, featuredProducts, bundles, settings] = await Promise.all([
-    getTranslations({ locale, namespace: "home" }),
-    getStorefrontCategories(),
-    getFeaturedProducts(8),
-    getHomeBundles(6),
-    getShopSettings(),
-  ]);
-
-  const heroProduct = featuredProducts[0];
-
-  // Static class strings, not an interpolated column count — Tailwind only
-  // emits utilities it can see at build time. The grid's own width is capped
-  // alongside the track count so a short list fills its row *at card size*:
-  // dropping to two full-width tracks would fill the row too, by inflating two
-  // boxes into half-page slabs.
-  const boxGridColumns =
-    bundles.length === 1
-      ? "grid-cols-1 max-w-64"
-      : bundles.length === 2
-        ? "grid-cols-2 max-w-xl"
-        : bundles.length === 3
-          ? "grid-cols-2 sm:grid-cols-3 sm:max-w-3xl"
-          : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4";
-
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Store",
-    name: "THE FIRST TRADE",
-    alternateName: "TFT",
-    url: absoluteUrl(locale),
-    description: t("seo.description"),
-    ...(settings.whatsappNumber ? { telephone: `+${settings.whatsappNumber}` } : {}),
-    ...(settings.addressAr || settings.addressFr
-      ? { address: localized(locale, settings.addressAr ?? "", settings.addressFr ?? "") }
-      : {}),
-  };
+  const t = await getTranslations({ locale, namespace: "home" });
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <Suspense fallback={null}>
+        <StoreJsonLd locale={locale} />
+      </Suspense>
 
       {/* Hero — "Atelier Blanc": an editorial split, white ground, serif headline. No eyebrow above the H1 (craft-floor bans a kicker outright, brief or not). */}
       <section className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 sm:py-20 md:grid-cols-[1.1fr_0.9fr] md:items-center md:py-28">
@@ -105,25 +75,19 @@ export default async function HomePage({
           </div>
         </div>
 
-        {heroProduct && (
-          // Shown at every width, not just `md:flex` — that gate removed the
-          // hero photo from every real phone, leaving mobile (the primary
-          // audience) a text-only hero while the editorial split it's meant
-          // to carry only rendered on desktop.
-          <div className="flex aspect-4/5 items-center justify-center border border-border p-6 sm:p-8 md:p-10">
-            {heroProduct.image ? (
-              // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed card transform
-              <img
-                src={buildCloudinaryUrl(heroProduct.image, "gallery")}
-                alt=""
-                width={800}
-                height={800}
-                loading="eager"
-                className="size-full object-contain mix-blend-multiply"
-              />
-            ) : null}
-          </div>
-        )}
+        {/* Shown at every width, not just `md:flex` — that gate removed the
+            hero photo from every real phone, leaving mobile (the primary
+            audience) a text-only hero while the editorial split it's meant to
+            carry only rendered on desktop.
+
+            The tray is part of the static shell so the hero's proportions are
+            correct from first paint; only the photo inside it streams, which
+            is why the fallback is the empty tray rather than nothing. */}
+        <div className="flex aspect-4/5 items-center justify-center border border-border p-6 sm:p-8 md:p-10">
+          <Suspense fallback={null}>
+            <HeroImage />
+          </Suspense>
+        </div>
       </section>
 
       {/* The mechanism this shop runs on — no accounts, no online payment,
@@ -161,34 +125,9 @@ export default async function HomePage({
         </div>
       </section>
 
-      {categories.length > 0 && (
-        <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6" aria-labelledby="home-categories">
-          {/* The heading string existed in both message files and was never
-              rendered, so this shipped as four bare grey words floating in
-              whitespace — worse than icon-only, which PRODUCT.md already
-              rules out: unlabeled text with no affordance at all. */}
-          <h2 id="home-categories" className="mb-5 font-display text-2xl font-medium text-ink">
-            {t("categories.title")}
-          </h2>
-          {/* The edge fade hints there's more to scroll. It used to fade BOTH
-              edges, so at scroll position 0 — what every visitor sees first —
-              the leading category was permanently half-faded, at every width,
-              including desktop where the row never overflows. Fading only the
-              trailing edge is correct at rest, and costs nothing when the row
-              is short because the chips pack to the start and the faded strip
-              falls on empty space. Mirrored for RTL; CSS masks have no logical
-              direction of their own. */}
-          <div className="flex snap-x snap-proximity gap-8 overflow-x-auto touch-pan-x mask-[linear-gradient(to_right,black_calc(100%-24px),transparent)] rtl:mask-[linear-gradient(to_left,black_calc(100%-24px),transparent)]">
-            {categories.map((category) => (
-              <CategoryChip
-                key={category.id}
-                slug={category.slug}
-                name={localized(locale, category.nameAr, category.nameFr)}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      <Suspense fallback={null}>
+        <CategoryRail locale={locale} />
+      </Suspense>
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
         <div className="mb-8 flex items-baseline justify-between gap-4 border-b border-border pb-4">
@@ -197,20 +136,9 @@ export default async function HomePage({
             {t("featured.viewAll")}
           </Link>
         </div>
-        {featuredProducts.length > 0 ? (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 md:grid-cols-4">
-            {featuredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                name={localized(locale, product.nameAr, product.nameFr)}
-                locale={locale}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-ink-soft">{t("featured.empty")}</p>
-        )}
+        <Suspense fallback={<ProductGridSkeleton count={8} />}>
+          <FeaturedGrid locale={locale} />
+        </Suspense>
       </section>
 
       {/* Boxes — a barely-there tint (Paper, not a full color region) to separate the section without shouting. */}
@@ -223,21 +151,140 @@ export default async function HomePage({
             </Link>
           </div>
           <p className="-mt-4 mb-8 max-w-md text-sm text-ink-soft">{t("boxes.subtitle")}</p>
-          {bundles.length > 0 ? (
-            // The widest track count is capped by how many boxes there are, so
-            // the row fills. A shop realistically has 2–5 boxes forever, and a
-            // fixed 4-column grid holding two of them left half a row empty on
-            // desktop — the section reading as though something failed to load.
-            <div className={`grid gap-x-6 gap-y-10 ${boxGridColumns}`}>
-              {bundles.map((bundle) => (
-                <BundleCard key={bundle.id} bundle={bundle} name={localized(locale, bundle.nameAr, bundle.nameFr)} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-ink-soft">{t("boxes.empty")}</p>
-          )}
+          <Suspense fallback={<ProductGridSkeleton count={4} />}>
+            <BoxesBand locale={locale} />
+          </Suspense>
         </div>
       </section>
     </>
+  );
+}
+
+/*
+ * Everything below reads cached storefront data, so none of it can be part of
+ * the prerendered shell — a `use cache` read still resolves at request time
+ * when its entry has gone stale. Each one streams into its own boundary
+ * instead, which is why the hero copy, the "how it works" steps and every
+ * section heading above are plain static markup: those are what the visitor
+ * sees on the first frame, and the data fills in underneath them.
+ */
+
+/** Structured data for the shop itself; renders no visible output. */
+async function StoreJsonLd({ locale }: { locale: string }) {
+  const [t, settings] = await Promise.all([
+    getTranslations({ locale, namespace: "home" }),
+    getShopSettings(),
+  ]);
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Store",
+    name: "THE FIRST TRADE",
+    alternateName: "TFT",
+    url: absoluteUrl(locale),
+    description: t("seo.description"),
+    ...(settings.whatsappNumber ? { telephone: `+${settings.whatsappNumber}` } : {}),
+    ...(settings.addressAr || settings.addressFr
+      ? { address: localized(locale, settings.addressAr ?? "", settings.addressFr ?? "") }
+      : {}),
+  };
+
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />;
+}
+
+/** The newest product's photo, doubling as the hero art. */
+async function HeroImage() {
+  const featured = await getFeaturedProducts(8);
+  const heroProduct = featured[0];
+  if (!heroProduct?.image) return null;
+
+  // The one image above the fold on the site's most-visited page, and its LCP
+  // element — so this is the only storefront photo that preloads rather than
+  // lazy-loading.
+  return <ProductImage publicId={heroProduct.image} sizes="(max-width: 768px) 100vw, 45vw" preload />;
+}
+
+async function CategoryRail({ locale }: { locale: string }) {
+  const [t, categories] = await Promise.all([
+    getTranslations({ locale, namespace: "home" }),
+    getStorefrontCategories(),
+  ]);
+  if (categories.length === 0) return null;
+
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6" aria-labelledby="home-categories">
+      {/* The heading string existed in both message files and was never
+          rendered, so this shipped as four bare grey words floating in
+          whitespace — worse than icon-only, which PRODUCT.md already rules
+          out: unlabeled text with no affordance at all. */}
+      <h2 id="home-categories" className="mb-5 font-display text-2xl font-medium text-ink">
+        {t("categories.title")}
+      </h2>
+      {/* The edge fade hints there's more to scroll — trailing edge only, so
+          the leading category isn't half-faded at scroll position 0. Mirrored
+          for RTL; CSS masks have no logical direction of their own. */}
+      <div className="flex snap-x snap-proximity gap-8 overflow-x-auto touch-pan-x mask-[linear-gradient(to_right,black_calc(100%-24px),transparent)] rtl:mask-[linear-gradient(to_left,black_calc(100%-24px),transparent)]">
+        {categories.map((category) => (
+          <CategoryChip
+            key={category.id}
+            slug={category.slug}
+            name={localized(locale, category.nameAr, category.nameFr)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+async function FeaturedGrid({ locale }: { locale: string }) {
+  const [t, featuredProducts] = await Promise.all([
+    getTranslations({ locale, namespace: "home" }),
+    getFeaturedProducts(8),
+  ]);
+
+  if (featuredProducts.length === 0) return <p className="text-sm text-ink-soft">{t("featured.empty")}</p>;
+
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 md:grid-cols-4">
+      {featuredProducts.map((product) => (
+        <ProductCard
+          key={product.id}
+          product={product}
+          name={localized(locale, product.nameAr, product.nameFr)}
+          locale={locale}
+        />
+      ))}
+    </div>
+  );
+}
+
+async function BoxesBand({ locale }: { locale: string }) {
+  const [t, bundles] = await Promise.all([
+    getTranslations({ locale, namespace: "home" }),
+    getHomeBundles(6),
+  ]);
+
+  if (bundles.length === 0) return <p className="text-sm text-ink-soft">{t("boxes.empty")}</p>;
+
+  // Static class strings, not an interpolated column count — Tailwind only
+  // emits utilities it can see at build time. The grid's own width is capped
+  // alongside the track count so a short list fills its row *at card size*:
+  // dropping to two full-width tracks would fill the row too, by inflating two
+  // boxes into half-page slabs.
+  const boxGridColumns =
+    bundles.length === 1
+      ? "grid-cols-1 max-w-64"
+      : bundles.length === 2
+        ? "grid-cols-2 max-w-xl"
+        : bundles.length === 3
+          ? "grid-cols-2 sm:grid-cols-3 sm:max-w-3xl"
+          : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4";
+
+  return (
+    <div className={`grid gap-x-6 gap-y-10 ${boxGridColumns}`}>
+      {bundles.map((bundle) => (
+        <BundleCard key={bundle.id} bundle={bundle} name={localized(locale, bundle.nameAr, bundle.nameFr)} />
+      ))}
+    </div>
   );
 }

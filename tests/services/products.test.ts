@@ -2,7 +2,16 @@ import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/src/db/client";
-import { accounts, categories, products, productVariants, sessions, stockMovements, users } from "@/src/db/schema";
+import {
+  accounts,
+  categories,
+  products,
+  productVariants,
+  sessions,
+  stockMovements,
+  users,
+  variantImages,
+} from "@/src/db/schema";
 import { auth } from "@/src/lib/auth";
 import { evaluateSession } from "@/src/services/authz";
 import { createProductCore, updateProductCore } from "@/src/services/products";
@@ -125,6 +134,71 @@ describe("products service — createProductCore / updateProductCore", () => {
 
     const second = await createProductCore(baseInput({ slug }), actorId, messages);
     expect(second).toEqual({ ok: false, error: { code: "CONFLICT", message: messages.slugTaken } });
+  });
+
+  /**
+   * The scoping guard on variant updates. `updateProductCore` resolves which
+   * of the submitted variant ids actually belong to the product being edited
+   * and touches only those — a payload naming a variant of a *different*
+   * product must leave that variant completely alone. This is a regression
+   * test for that rule surviving the rewrite from a per-variant
+   * `UPDATE ... RETURNING` loop into a batched, set-based reconciliation.
+   */
+  it("updateProductCore ignores a variant id belonging to a different product", async () => {
+    const victim = await createProductCore(
+      baseInput({
+        variants: [
+          { nameAr: "أصلي", nameFr: "Original", stockQty: 2, images: ["papeterie/victim-a", "papeterie/victim-b"] },
+        ],
+      }),
+      actorId,
+      messages,
+    );
+    expect(victim.ok).toBe(true);
+    if (!victim.ok) return;
+    createdProductIds.push(victim.data.id);
+
+    const attacker = await createProductCore(baseInput(), actorId, messages);
+    expect(attacker.ok).toBe(true);
+    if (!attacker.ok) return;
+    createdProductIds.push(attacker.data.id);
+
+    const [victimVariant] = await db
+      .select({ id: productVariants.id })
+      .from(productVariants)
+      .where(eq(productVariants.productId, victim.data.id));
+
+    // Edit the attacker's product, but name the victim's variant.
+    const result = await updateProductCore(
+      attacker.data.id,
+      baseInput({
+        slug: `hijack-attempt-${Date.now()}`,
+        variants: [
+          { id: victimVariant.id, nameAr: "مخترق", nameFr: "Hijacked", stockQty: 2, images: ["papeterie/attacker"] },
+        ],
+      }),
+      actorId,
+      messages,
+    );
+    expect(result.ok).toBe(true);
+
+    const [after] = await db
+      .select({ nameFr: productVariants.nameFr, productId: productVariants.productId })
+      .from(productVariants)
+      .where(eq(productVariants.id, victimVariant.id));
+
+    expect(after.nameFr).toBe("Original");
+    expect(after.productId).toBe(victim.data.id);
+
+    // The images are the part the SQL `WHERE` on the UPDATE does not protect:
+    // the batched delete/insert is keyed off the resolved ownership set, so if
+    // that set ever trusted the submitted ids, another product's gallery would
+    // be wiped and replaced here.
+    const victimImages = await db
+      .select({ publicId: variantImages.publicId })
+      .from(variantImages)
+      .where(eq(variantImages.variantId, victimVariant.id));
+    expect(victimImages.map((row) => row.publicId).sort()).toEqual(["papeterie/victim-a", "papeterie/victim-b"]);
   });
 
   it("updateProductCore also rejects a discount price greater than or equal to the price", async () => {

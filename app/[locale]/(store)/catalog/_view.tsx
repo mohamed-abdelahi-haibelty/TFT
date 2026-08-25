@@ -1,11 +1,19 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { CatalogFilters, type CatalogFilterValues } from "@/components/store/catalog-filters";
 import { CategoryChip } from "@/components/store/category-chip";
+import { CatalogResultsSkeleton, ProductGridSkeleton } from "@/components/store/skeletons";
 import { ProductCard } from "@/components/store/product-card";
 import { Link } from "@/src/i18n/navigation";
 import { localized } from "@/src/lib/locale-text";
-import { getStorefrontCategories, listCatalogProducts, type CatalogSort } from "@/src/services/storefront";
+import {
+  getStorefrontCategories,
+  listCatalogProducts,
+  type CatalogFilters as CatalogQueryFilters,
+  type CatalogSort,
+  type StorefrontProductCard,
+} from "@/src/services/storefront";
 
 const SORTS: CatalogSort[] = ["newest", "price-asc", "price-desc"];
 
@@ -28,39 +36,62 @@ function parsePositiveInt(value: string | undefined): number | undefined {
   return Math.min(parsed, MAX_PRICE_FILTER);
 }
 
+/** Standing in for the whole view while `params` / `searchParams` resolve. */
+export function CatalogShellSkeleton() {
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+      <CatalogResultsSkeleton />
+    </div>
+  );
+}
+
 /**
  * Shared render for `/catalog` and `/catalog/[categorySlug]` (task 09) — the
  * two routes differ only in whether a category is pinned, so one view keeps
  * the heading/filters/grid logic in one place. `notFound()` on an unknown
  * category slug (mirrors the product page's own 404 rule).
+ *
+ * Both `params` and `searchParams` arrive as promises and are awaited *here*,
+ * inside the page's Suspense boundary, rather than in the page component —
+ * awaiting either at the top would block the route's static shell. The
+ * category rail is rendered from cached data before either resolves, so the
+ * part of the page a visitor navigates with is present immediately.
  */
 export async function CatalogView({
   locale,
-  categorySlug,
+  params,
   searchParams,
 }: {
   locale: string;
-  categorySlug?: string;
-  searchParams: CatalogFilterValues;
+  params?: Promise<{ categorySlug: string }>;
+  searchParams: Promise<CatalogFilterValues>;
 }) {
-  const [t, categories] = await Promise.all([
+  const [t, categories, resolvedParams, resolvedSearchParams] = await Promise.all([
     getTranslations({ locale, namespace: "catalog" }),
     getStorefrontCategories(),
+    params,
+    searchParams,
   ]);
 
+  const categorySlug = resolvedParams?.categorySlug;
   const activeCategory = categorySlug ? categories.find((category) => category.slug === categorySlug) : undefined;
   if (categorySlug && !activeCategory) notFound();
 
-  const filters = {
+  const filters: CatalogQueryFilters = {
     categorySlug,
-    search: searchParams.q,
-    minPrice: parsePositiveInt(searchParams.min),
-    maxPrice: parsePositiveInt(searchParams.max),
-    inStockOnly: searchParams.stock === "1",
-    sort: parseSort(searchParams.sort),
+    search: resolvedSearchParams.q,
+    minPrice: parsePositiveInt(resolvedSearchParams.min),
+    maxPrice: parsePositiveInt(resolvedSearchParams.max),
+    inStockOnly: resolvedSearchParams.stock === "1",
+    sort: parseSort(resolvedSearchParams.sort),
   };
 
-  const productList = await listCatalogProducts(filters);
+  // Started once here and awaited by both consumers below. Calling
+  // `listCatalogProducts` in each of them would be a cache hit twice over for
+  // the bounded filters, but a second real query on any `?q=` / price search —
+  // exactly the case that is uncached by design.
+  const productsPromise = listCatalogProducts(filters);
+
   const action = categorySlug ? `/${locale}/catalog/${categorySlug}` : `/${locale}/catalog`;
   const heading = activeCategory ? localized(locale, activeCategory.nameAr, activeCategory.nameFr) : t("heading.all");
 
@@ -90,27 +121,52 @@ export async function CatalogView({
 
       <div className="mb-8 flex items-baseline justify-between gap-4 border-b border-border pb-4">
         <h1 className="font-display text-2xl font-medium text-ink sm:text-3xl">{heading}</h1>
-        <p className="shrink-0 text-xs text-ink-soft">{t("resultCount", { count: productList.length })}</p>
+        <Suspense fallback={<span className="h-4 w-20 shrink-0" />}>
+          <ResultCount locale={locale} products={productsPromise} />
+        </Suspense>
       </div>
 
       <div className="mb-10">
-        <CatalogFilters locale={locale} action={action} values={searchParams} />
+        <CatalogFilters locale={locale} action={action} values={resolvedSearchParams} />
       </div>
 
-      {productList.length > 0 ? (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 md:grid-cols-4">
-          {productList.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              name={localized(locale, product.nameAr, product.nameFr)}
-              locale={locale}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-ink-soft">{t("empty")}</p>
-      )}
+      {/* The filter form and category rail above are usable the moment they
+          paint; only the grid waits on the query. */}
+      <Suspense fallback={<ProductGridSkeleton count={8} />}>
+        <CatalogGrid locale={locale} products={productsPromise} />
+      </Suspense>
+    </div>
+  );
+}
+
+type ProductsPromise = Promise<StorefrontProductCard[]>;
+
+async function ResultCount({ locale, products }: { locale: string; products: ProductsPromise }) {
+  const [t, productList] = await Promise.all([
+    getTranslations({ locale, namespace: "catalog" }),
+    products,
+  ]);
+  return <p className="shrink-0 text-xs text-ink-soft">{t("resultCount", { count: productList.length })}</p>;
+}
+
+async function CatalogGrid({ locale, products }: { locale: string; products: ProductsPromise }) {
+  const [t, productList] = await Promise.all([
+    getTranslations({ locale, namespace: "catalog" }),
+    products,
+  ]);
+
+  if (productList.length === 0) return <p className="text-sm text-ink-soft">{t("empty")}</p>;
+
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 md:grid-cols-4">
+      {productList.map((product) => (
+        <ProductCard
+          key={product.id}
+          product={product}
+          name={localized(locale, product.nameAr, product.nameFr)}
+          locale={locale}
+        />
+      ))}
     </div>
   );
 }

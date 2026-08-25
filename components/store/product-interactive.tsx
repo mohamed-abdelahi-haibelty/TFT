@@ -4,11 +4,11 @@ import { ChevronLeft, ChevronRight, MessageCircle, Minus, Package, Plus, ZoomIn 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ImageLightbox } from "@/components/store/image-lightbox";
+import { ProductImage } from "@/components/store/product-image";
 import { PromoCountdown } from "@/components/store/promo-countdown";
 import { StockBadge } from "@/components/store/stock-badge";
 import { useCartDrawer } from "@/components/store/cart-drawer-context";
 import { addToCart } from "@/src/lib/cart";
-import { buildCloudinarySrcSet, buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 import { buildWhatsAppUrl } from "@/src/lib/whatsapp";
 import { deriveStockStatus } from "@/src/lib/stock-status";
@@ -206,17 +206,15 @@ export function ProductInteractive({
         >
           {activeImage ? (
             <div className="relative size-full">
-              {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform */}
-              <img
+              {/* Keyed on the public_id so switching variant or gallery frame
+                  remounts the image — otherwise the new photo would swap in
+                  with no placeholder while it loads. */}
+              <ProductImage
                 key={activeImage}
-                src={buildCloudinaryUrl(activeImage, "gallery")}
-                srcSet={buildCloudinarySrcSet(activeImage, ["card", "gallery", "zoom"])}
+                publicId={activeImage}
                 sizes="(min-width: 1024px) 45vw, 90vw"
-                width={800}
-                height={800}
-                fetchPriority="high"
                 alt={t("imageAlt", { name })}
-                className="size-full object-contain mix-blend-multiply"
+                preload
               />
               <button
                 type="button"
@@ -271,16 +269,7 @@ export function ProductInteractive({
                   index === imageIndex ? "border-ink" : "border-border hover:border-ink"
                 }`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform */}
-                <img
-                  src={buildCloudinaryUrl(image, "thumbnail")}
-                  width={120}
-                  height={120}
-                  loading="lazy"
-                  decoding="async"
-                  alt={t("imageAlt", { name })}
-                  className="size-full object-contain mix-blend-multiply"
-                />
+                <ProductImage publicId={image} sizes="64px" alt={t("imageAlt", { name })} />
               </button>
             ))}
           </div>

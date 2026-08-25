@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ProductInteractive } from "@/components/store/product-interactive";
+import { DetailSkeleton } from "@/components/store/skeletons";
 import { Link } from "@/src/i18n/navigation";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
 import { absoluteUrl, localeAlternates } from "@/src/lib/site";
 import { deriveStockStatus } from "@/src/lib/stock-status";
 import { getShopSettings } from "@/src/services/settings";
-import { getStorefrontProductBySlug } from "@/src/services/storefront";
+import { getSitemapCatalogCore, getStorefrontProductBySlug } from "@/src/services/storefront";
 
 export async function generateMetadata({
   params,
@@ -40,11 +42,39 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * Every active product is prerendered (see `generateStaticParams`). The slug
+ * is awaited inside the boundary rather than at the top so that a product
+ * *not* in that list — one just added in admin — still gets an instant App
+ * Shell instead of a blank wait while the page renders.
+ */
 export default async function ProductPage({
   params,
 }: {
   params: Promise<{ locale: string; slug: string }>;
 }) {
+  // `params` is not awaited here — not even for the locale. Reading URL data
+  // in the page body is exactly what stops the shell from being reusable
+  // across slugs, which is the whole point of prerendering one. The body
+  // component does it inside the boundary, and calls `setRequestLocale` there.
+  return (
+    <Suspense fallback={<DetailSkeleton />}>
+      <ProductBody params={params} />
+    </Suspense>
+  );
+}
+
+/**
+ * Slugs are globally unique, so one entry per product covers both locales —
+ * the `[locale]` segment's own `generateStaticParams` supplies the other half
+ * of the pair. Only active products are listed; an inactive one 404s anyway.
+ */
+export async function generateStaticParams() {
+  const catalog = await getSitemapCatalogCore();
+  return catalog.products.map((product) => ({ slug: product.slug }));
+}
+
+async function ProductBody({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
 

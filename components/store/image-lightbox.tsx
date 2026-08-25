@@ -125,7 +125,14 @@ export function ImageLightbox({
         onTouchEnd={handleTouchEnd}
         onClick={(event) => event.stopPropagation()}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, full-resolution "zoom" transform */}
+        {/* The one storefront image that is still a raw <img>, deliberately.
+            Zoomed mode is `w-auto max-w-none` inside a scroll container — the
+            image must overflow at its natural size for panning to work at all,
+            and `next/image` (whether `fill` or intrinsic) writes its own
+            sizing that fights exactly that. Nothing is lost here: the viewer
+            opens on demand, over a dark backdrop, on a photo the gallery hero
+            has usually already warmed. */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
         <img
           key={activeImage}
           src={buildCloudinaryUrl(activeImage, "zoom")}

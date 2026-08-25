@@ -1,6 +1,6 @@
 import { Gift } from "lucide-react";
+import { ProductImage } from "@/components/store/product-image";
 import { Link } from "@/src/i18n/navigation";
-import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 import type { StorefrontBundleCard } from "@/src/services/storefront";
 
@@ -10,16 +10,7 @@ export function BundleCard({ bundle, name }: { bundle: StorefrontBundleCard; nam
     <Link href={`/boxes/${bundle.slug}`} className="group flex flex-col">
       <div className="mb-4 flex aspect-square items-center justify-center border border-border p-6 transition-colors group-hover:border-ink">
         {bundle.image ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed card transform
-          <img
-            src={buildCloudinaryUrl(bundle.image, "card")}
-            alt=""
-            width={400}
-            height={400}
-            loading="lazy"
-            decoding="async"
-            className="size-full object-contain mix-blend-multiply"
-          />
+          <ProductImage publicId={bundle.image} sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw" />
         ) : (
           <Gift className="size-8 text-ink-soft" aria-hidden="true" />
         )}

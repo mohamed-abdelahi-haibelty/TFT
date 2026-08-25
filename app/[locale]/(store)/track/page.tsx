@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { TrackView } from "@/app/[locale]/(store)/track/_view";
 import { absoluteUrl, localeAlternates } from "@/src/lib/site";
@@ -31,7 +32,23 @@ export default async function TrackPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const { code } = await searchParams;
 
+  // `?code=` is request-time, and it only prefills one input — no reason to
+  // hold the whole lookup form back for it.
+  return (
+    <Suspense fallback={<TrackView locale={locale} />}>
+      <TrackForm locale={locale} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function TrackForm({
+  locale,
+  searchParams,
+}: {
+  locale: string;
+  searchParams: Promise<{ code?: string }>;
+}) {
+  const { code } = await searchParams;
   return <TrackView locale={locale} defaultCode={code} />;
 }

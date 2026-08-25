@@ -1,6 +1,5 @@
 import { ChevronDown } from "lucide-react";
 import { getTranslations } from "next-intl/server";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export type CatalogFilterValues = {
   q?: string;
@@ -104,33 +103,31 @@ export async function CatalogFilters({
           <label htmlFor="catalog-sort" className={labelClass}>
             {t("sortLabel")}
           </label>
-          {/* `items` is passed explicitly because this is a *server*
-              component: `Select` derives labels by matching children against
-              the `SelectItem` function identity, and that identity does not
-              survive the RSC boundary, so the trigger fell back to printing
-              the raw enum ("newest") in both locales. */}
-          <Select
-            name="sort"
-            defaultValue={values.sort ?? "newest"}
-            items={{
-              newest: t("sortNewest"),
-              "price-asc": t("sortPriceAsc"),
-              "price-desc": t("sortPriceDesc"),
-            }}
-          >
-            <SelectTrigger
+          {/* A native `<select>`, not the `ui/select` primitive. Three static
+              options inside a form that already submits without JavaScript —
+              and the Base UI version was the *only* thing pulling
+              @base-ui/react into this route, at ~168 KB of uncompressed client
+              JS that also has to hydrate before the control does anything. The
+              native one works from first paint, gets the platform picker on a
+              low-end phone, and drops the `items`-vs-`SelectItem` identity
+              workaround this needed to render its own labels across the RSC
+              boundary. */}
+          <div className="relative">
+            <select
               id="catalog-sort"
-              size="lg"
-              className="w-full rounded-[2px]! focus-visible:border-ink! focus-visible:ring-0!"
+              name="sort"
+              defaultValue={values.sort ?? "newest"}
+              className={`${fieldClass} w-full appearance-none pe-9`}
             >
-              <SelectValue placeholder={t("sortLabel")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">{t("sortNewest")}</SelectItem>
-              <SelectItem value="price-asc">{t("sortPriceAsc")}</SelectItem>
-              <SelectItem value="price-desc">{t("sortPriceDesc")}</SelectItem>
-            </SelectContent>
-          </Select>
+              <option value="newest">{t("sortNewest")}</option>
+              <option value="price-asc">{t("sortPriceAsc")}</option>
+              <option value="price-desc">{t("sortPriceDesc")}</option>
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute end-3 top-1/2 size-4 -translate-y-1/2 text-ink-soft"
+              aria-hidden="true"
+            />
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-4 sm:col-span-2 lg:col-span-6">

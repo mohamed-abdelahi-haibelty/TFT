@@ -1,9 +1,9 @@
 import { Package } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { ProductImage } from "@/components/store/product-image";
 import { PromoCountdown } from "@/components/store/promo-countdown";
 import { StockBadge } from "@/components/store/stock-badge";
 import { Link } from "@/src/i18n/navigation";
-import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 import { deriveStockStatus } from "@/src/lib/stock-status";
 import type { StorefrontProductCard } from "@/src/services/storefront";
@@ -32,16 +32,7 @@ export async function ProductCard({
     <Link href={`/product/${product.slug}`} className="group flex flex-col">
       <div className="mb-4 flex aspect-square items-center justify-center border border-border p-6 transition-colors group-hover:border-ink">
         {product.image ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed card transform
-          <img
-            src={buildCloudinaryUrl(product.image, "card")}
-            alt=""
-            width={400}
-            height={400}
-            loading="lazy"
-            decoding="async"
-            className="size-full object-contain mix-blend-multiply"
-          />
+          <ProductImage publicId={product.image} sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw" />
         ) : (
           <Package className="size-8 text-ink-soft" aria-hidden="true" />
         )}

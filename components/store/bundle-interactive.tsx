@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BundleAvailabilityBadge } from "@/components/store/bundle-availability-badge";
 import { ImageLightbox } from "@/components/store/image-lightbox";
+import { ProductImage } from "@/components/store/product-image";
 import { PromoCountdown } from "@/components/store/promo-countdown";
 import { useCartDrawer } from "@/components/store/cart-drawer-context";
 import { addToCart } from "@/src/lib/cart";
-import { buildCloudinarySrcSet, buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 
 export type BundleInteractiveProps = {
@@ -148,17 +148,13 @@ export function BundleInteractive({
         >
           {activeImage ? (
             <div className="relative size-full">
-              {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform */}
-              <img
+              {/* Keyed on the public_id — see ProductInteractive's own note. */}
+              <ProductImage
                 key={activeImage}
-                src={buildCloudinaryUrl(activeImage, "gallery")}
-                srcSet={buildCloudinarySrcSet(activeImage, ["card", "gallery", "zoom"])}
+                publicId={activeImage}
                 sizes="(min-width: 1024px) 320px, 90vw"
-                width={800}
-                height={800}
-                fetchPriority="high"
                 alt={t("imageAlt", { name })}
-                className="size-full object-contain mix-blend-multiply"
+                preload
               />
               <button
                 type="button"
@@ -213,16 +209,7 @@ export function BundleInteractive({
                   index === imageIndex ? "border-ink" : "border-border hover:border-ink"
                 }`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform */}
-                <img
-                  src={buildCloudinaryUrl(image, "thumbnail")}
-                  alt={t("imageAlt", { name })}
-                  width={120}
-                  height={120}
-                  loading="lazy"
-                  decoding="async"
-                  className="size-full min-w-0 min-h-0 object-contain mix-blend-multiply"
-                />
+                <ProductImage publicId={image} sizes="56px" alt={t("imageAlt", { name })} />
               </button>
             ))}
           </div>

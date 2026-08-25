@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, or } from "drizzle-orm";
+import { and, eq, gt, lte, or, sql } from "drizzle-orm";
 import { db } from "@/src/db/client";
 import { promotionItems, promotions } from "@/src/db/schema";
 
@@ -108,12 +108,28 @@ export async function getEffectivePrice(
  * currently-active promotion of this channel, not one per item — active
  * promotions are few regardless of catalog size, so this stays a single
  * round trip whether the catalog has 20 products or 500.
+ *
+ * `now` is optional, and omitting it is what lets the storefront prerender.
+ * Reading the JS clock (`new Date()`) inside a `use cache` scope is a hard
+ * prerender error under Cache Components, and threading a request-time clock
+ * through instead would make every catalog page dynamic — throwing away the
+ * static shell this whole read path exists to fill. So when no clock is
+ * given the window is evaluated by Postgres itself (`now()`), the query
+ * becomes self-dating, and how long a storefront price may lag the promotion
+ * calendar is bounded by that caller's `cacheLife` instead — the same
+ * guarantee `STOREFRONT_REVALIDATE_SECONDS` used to give.
+ *
+ * Every path that *charges* money — `createOrderCore`, the POS — still passes
+ * an explicit `Date`, so "re-price against the real clock at checkout" is
+ * unchanged. Tests pass their own fixed `Date` for the same reason.
  */
 export async function getEffectivePrices(
   items: PricingItem[],
   channel: PricingChannel,
-  now: Date,
+  now?: Date,
 ): Promise<Map<string, EffectivePrice>> {
+  const clock = now ?? sql`now()`;
+
   const promoRows = await db
     .select({
       productId: promotionItems.productId,
@@ -129,8 +145,8 @@ export async function getEffectivePrices(
     .where(
       and(
         eq(promotions.isActive, true),
-        lte(promotions.startsAt, now),
-        gt(promotions.endsAt, now),
+        lte(promotions.startsAt, clock),
+        gt(promotions.endsAt, clock),
         or(eq(promotions.channel, channel), eq(promotions.channel, "both")),
       ),
     );

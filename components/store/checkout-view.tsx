@@ -3,6 +3,7 @@
 import { CircleAlert, CircleCheck, Copy, ShoppingBag } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import { ProductImage } from "@/components/store/product-image";
 import { Link } from "@/src/i18n/navigation";
 import {
   CART_UPDATED_EVENT,
@@ -14,7 +15,6 @@ import {
   removeFromCart,
 } from "@/src/lib/cart";
 import { clearLastOrder, readLastOrder, writeLastOrder } from "@/src/lib/last-order";
-import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 import { isValidMauritanianPhone } from "@/src/lib/phone";
 import { buildWhatsAppOrderMessage, buildWhatsAppUrl } from "@/src/lib/whatsapp";
@@ -99,16 +99,7 @@ function CartLineRow({ line, locale }: { line: CartItem; locale: string }) {
     <li className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
       <div className="flex size-12 shrink-0 items-center justify-center border border-border p-1.5">
         {line.image ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform
-          <img
-            src={buildCloudinaryUrl(line.image, "thumbnail")}
-            alt=""
-            width={120}
-            height={120}
-            loading="lazy"
-            decoding="async"
-            className="size-full object-contain mix-blend-multiply"
-          />
+          <ProductImage publicId={line.image} sizes="48px" />
         ) : (
           <ShoppingBag className="size-5 text-ink-soft" aria-hidden="true" />
         )}

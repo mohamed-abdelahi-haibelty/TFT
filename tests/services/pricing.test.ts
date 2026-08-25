@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/src/db/client";
 import { bundles, categories, products, promotionItems, promotions } from "@/src/db/schema";
-import { computePromoPrice, getEffectivePrice } from "@/src/services/pricing";
+import { computePromoPrice, getEffectivePrice, getEffectivePrices } from "@/src/services/pricing";
 import { togglePromotionActiveCore } from "@/src/services/promotions";
 
 describe("pricing service — computePromoPrice (pure)", () => {
@@ -301,5 +301,65 @@ describe("pricing service — getEffectivePrice", () => {
     const result = await getEffectivePrice({ kind: "bundle", id: bundleId, price: 2000 }, "web", now);
     expect(result.price).toBe(1500);
     expect(result.base).toBe(2000);
+  });
+
+  /**
+   * The storefront's cached reads call `getEffectivePrices` with no `now` at
+   * all, because reading the JS clock inside a `use cache` scope is a hard
+   * prerender error — the window is dated by Postgres instead. These cover
+   * that path specifically: the same promotion must resolve identically
+   * whether the caller supplies a clock or lets the database supply one, and
+   * a window that has already closed must not apply under either.
+   */
+  it("applies a live promo when the clock comes from Postgres instead of the caller", async () => {
+    const now = new Date();
+    const productId = await makeProduct(1000);
+    await makePromo({
+      kind: "percent",
+      value: 30,
+      startsAt: new Date(now.getTime() - HOUR),
+      endsAt: new Date(now.getTime() + HOUR),
+      channel: "web",
+      productId,
+    });
+
+    const item = { kind: "product", id: productId, price: 1000, discountPrice: null } as const;
+
+    const withDbClock = await getEffectivePrices([item], "web");
+    const withCallerClock = await getEffectivePrices([item], "web", now);
+
+    expect(withDbClock.get(productId)?.price).toBe(700);
+    expect(withDbClock.get(productId)?.price).toBe(withCallerClock.get(productId)?.price);
+  });
+
+  it("ignores an expired promo when the clock comes from Postgres", async () => {
+    const now = new Date();
+    const productId = await makeProduct(1000);
+    await makePromo({
+      kind: "percent",
+      value: 30,
+      startsAt: new Date(now.getTime() - 2 * HOUR),
+      endsAt: new Date(now.getTime() - HOUR),
+      channel: "web",
+      productId,
+    });
+
+    const prices = await getEffectivePrices(
+      [{ kind: "product", id: productId, price: 1000, discountPrice: null }],
+      "web",
+    );
+
+    expect(prices.get(productId)).toEqual({ price: 1000, base: 1000 });
+  });
+
+  it("falls back to a standing discount_price under the Postgres clock", async () => {
+    const productId = await makeProduct(1000, 800);
+
+    const prices = await getEffectivePrices(
+      [{ kind: "product", id: productId, price: 1000, discountPrice: 800 }],
+      "web",
+    );
+
+    expect(prices.get(productId)).toEqual({ price: 800, base: 1000 });
   });
 });

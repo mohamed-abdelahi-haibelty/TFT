@@ -50,8 +50,21 @@ describe("cloudinary URL builder", () => {
     const url = cloudinaryLoader({ src: "papeterie/abc123", width: 640, quality: 80 });
 
     expect(url).toBe(
-      "https://res.cloudinary.com/test-cloud/image/upload/c_limit,w_640,q_80,f_auto/papeterie/abc123",
+      "https://res.cloudinary.com/test-cloud/image/upload/c_pad,b_white,w_640,h_640,q_80,f_auto/papeterie/abc123",
     );
+  });
+
+  it("pads the loader output onto a white square, like the fixed sizes", async () => {
+    process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME = "test-cloud";
+    const { cloudinaryLoader } = await import("@/src/lib/cloudinary");
+
+    // The tray treatment (`aspect-square` + `mix-blend-multiply`) only works
+    // if every width comes back square on a white ground — a `c_limit` image
+    // would letterbox and the multiply would have nothing uniform to cancel.
+    const url = cloudinaryLoader({ src: "papeterie/abc123", width: 420 });
+
+    expect(url).toContain("c_pad,b_white");
+    expect(url).toContain("w_420,h_420");
   });
 
   it("defaults the loader quality to auto when not provided", async () => {

@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BundleInteractive } from "@/components/store/bundle-interactive";
+import { DetailSkeleton } from "@/components/store/skeletons";
 import { Link } from "@/src/i18n/navigation";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
 import { formatMoney } from "@/src/lib/money";
 import { absoluteUrl, localeAlternates } from "@/src/lib/site";
-import { getStorefrontBundleBySlug } from "@/src/services/storefront";
+import { getSitemapCatalogCore, getStorefrontBundleBySlug } from "@/src/services/storefront";
 
 export async function generateMetadata({
   params,
@@ -39,11 +41,29 @@ export async function generateMetadata({
   };
 }
 
+/** Same shape as the product page — see its comment. */
 export default async function BundlePage({
   params,
 }: {
   params: Promise<{ locale: string; slug: string }>;
 }) {
+  // `params` is not awaited here — not even for the locale. Reading URL data
+  // in the page body is exactly what stops the shell from being reusable
+  // across slugs, which is the whole point of prerendering one. The body
+  // component does it inside the boundary, and calls `setRequestLocale` there.
+  return (
+    <Suspense fallback={<DetailSkeleton />}>
+      <BundleBody params={params} />
+    </Suspense>
+  );
+}
+
+export async function generateStaticParams() {
+  const catalog = await getSitemapCatalogCore();
+  return catalog.bundles.map((bundle) => ({ slug: bundle.slug }));
+}
+
+async function BundleBody({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
 

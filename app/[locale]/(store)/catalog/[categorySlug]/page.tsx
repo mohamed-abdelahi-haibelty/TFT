@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { CatalogView } from "@/app/[locale]/(store)/catalog/_view";
+import { CatalogShellSkeleton, CatalogView } from "@/app/[locale]/(store)/catalog/_view";
 import { localized } from "@/src/lib/locale-text";
 import { absoluteUrl, localeAlternates } from "@/src/lib/site";
-import { getStorefrontCategories } from "@/src/services/storefront";
+import { getStorefrontCategories, getStorefrontCategoriesCore } from "@/src/services/storefront";
 
 export async function generateMetadata({
   params,
@@ -25,6 +26,11 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * Prerenders one shell for every category (see `generateStaticParams`), with
+ * both the category slug and `searchParams` resolved inside the boundary —
+ * awaiting either at the top would block the shell for all of them.
+ */
 export default async function CatalogCategoryPage({
   params,
   searchParams,
@@ -32,9 +38,23 @@ export default async function CatalogCategoryPage({
   params: Promise<{ locale: string; categorySlug: string }>;
   searchParams: Promise<{ q?: string; min?: string; max?: string; stock?: string; sort?: string }>;
 }) {
-  const { locale, categorySlug } = await params;
+  const { locale } = await params;
   setRequestLocale(locale);
-  const resolvedSearchParams = await searchParams;
 
-  return <CatalogView locale={locale} categorySlug={categorySlug} searchParams={resolvedSearchParams} />;
+  return (
+    <Suspense fallback={<CatalogShellSkeleton />}>
+      <CatalogView locale={locale} params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+/**
+ * One prerendered shell per category. Categories are a small, closed set that
+ * changes only when an admin edits one — and `revalidateTag("categories")`
+ * already fires there. A slug not in this list is still served: Next hands
+ * back the App Shell immediately and upgrades it once the param is known.
+ */
+export async function generateStaticParams() {
+  const categories = await getStorefrontCategoriesCore();
+  return categories.map((category) => ({ categorySlug: category.slug }));
 }

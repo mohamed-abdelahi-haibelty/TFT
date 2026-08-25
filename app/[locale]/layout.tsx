@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Fraunces, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import localFont from "next/font/local";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { pickMessages, ROOT_MESSAGE_NAMESPACES } from "@/src/i18n/messages";
 import { routing } from "@/src/i18n/routing";
 import { PostHogProvider } from "@/components/analytics/posthog-provider";
 import { absoluteUrl, localeAlternates, siteOrigin } from "@/src/lib/site";
@@ -104,6 +106,12 @@ export default async function LocaleLayout({
 
   const dir = locale === "ar" ? "rtl" : "ltr";
 
+  // Only what a client component *outside* a route group can reach (today,
+  // `error.tsx`). The storefront and admin layouts each declare their own,
+  // larger set — see src/i18n/messages.ts for why this isn't just the whole
+  // catalog.
+  const messages = await pickMessages(ROOT_MESSAGE_NAMESPACES);
+
   return (
     <html
       lang={locale}
@@ -111,9 +119,15 @@ export default async function LocaleLayout({
       className={`${plusJakartaSans.variable} ${fraunces.variable} ${thmanyahSans.variable} ${thmanyahSerifText.variable} ${thmanyahSerifDisplay.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <NextIntlClientProvider>
+        <NextIntlClientProvider messages={messages}>
           {children}
-          <PostHogProvider />
+          {/* Reads `usePathname()`, which suspends while Next generates the
+              App Shell for any route below with params it doesn't yet know.
+              It renders null either way, so a null fallback costs nothing and
+              keeps the shell prerenderable. */}
+          <Suspense fallback={null}>
+            <PostHogProvider />
+          </Suspense>
         </NextIntlClientProvider>
       </body>
     </html>

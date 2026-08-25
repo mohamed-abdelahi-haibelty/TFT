@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { CatalogView } from "@/app/[locale]/(store)/catalog/_view";
+import { CatalogShellSkeleton, CatalogView } from "@/app/[locale]/(store)/catalog/_view";
 import { absoluteUrl, localeAlternates } from "@/src/lib/site";
 
 export async function generateMetadata({
@@ -18,6 +19,12 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * `searchParams` is request-time by definition, so awaiting it here would
+ * block the whole route's prerender. `CatalogView` awaits it inside this
+ * boundary instead: the shell (header, category rail, filter form) is
+ * prerendered and served instantly, and only the results grid streams in.
+ */
 export default async function CatalogPage({
   params,
   searchParams,
@@ -27,7 +34,10 @@ export default async function CatalogPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const resolvedSearchParams = await searchParams;
 
-  return <CatalogView locale={locale} searchParams={resolvedSearchParams} />;
+  return (
+    <Suspense fallback={<CatalogShellSkeleton />}>
+      <CatalogView locale={locale} searchParams={searchParams} />
+    </Suspense>
+  );
 }

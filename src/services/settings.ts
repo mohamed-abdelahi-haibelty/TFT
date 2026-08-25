@@ -1,4 +1,4 @@
-import { unstable_cache } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db } from "@/src/db/client";
@@ -12,9 +12,9 @@ import { requirePermission } from "@/src/services/authz";
  *
  * The read is public and unauthenticated (the storefront footer, the product
  * page's "ask" link and the checkout handoff all need it), so it follows
- * `storefront.ts`'s posture rather than the admin services': an
- * `unstable_cache` wrapper over an exported `*Core` twin that tests call
- * directly, since `unstable_cache` throws outside a real Next.js request.
+ * `storefront.ts`'s posture rather than the admin services': a `use cache`
+ * wrapper over an exported `*Core` twin that tests call directly, since a
+ * cached scope can't run outside a real Next.js render.
  *
  * Writes are admin-only. `staff` cannot change the shop's identity, for the
  * same reason PRODUCT.md keeps them away from prices and users.
@@ -56,9 +56,12 @@ export async function getShopSettingsCore(): Promise<ShopSettings> {
   return withEnvFallback(row ?? null);
 }
 
-export const getShopSettings = unstable_cache(getShopSettingsCore, ["shop-settings"], {
-  tags: ["shop-settings"],
-});
+export async function getShopSettings(): Promise<ShopSettings> {
+  "use cache";
+  cacheLife("max");
+  cacheTag("shop-settings");
+  return getShopSettingsCore();
+}
 
 /** Empty string is a real input here — it means "clear this field" — so blanks normalize to `null` rather than failing `min(1)`. */
 const optionalText = z

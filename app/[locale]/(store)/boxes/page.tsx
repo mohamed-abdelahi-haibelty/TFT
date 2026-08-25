@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { ChevronRight, Gift } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BundleAvailabilityBadge } from "@/components/store/bundle-availability-badge";
+import { ProductImage } from "@/components/store/product-image";
+import { BundleListSkeleton } from "@/components/store/skeletons";
 import { Link } from "@/src/i18n/navigation";
-import { buildCloudinarySrcSet, buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
 import { formatMoney } from "@/src/lib/money";
 import { absoluteUrl, localeAlternates } from "@/src/lib/site";
@@ -37,12 +39,7 @@ export default async function BoxesPage({ params }: { params: Promise<{ locale: 
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const [t, tStore, tBadges, bundleList] = await Promise.all([
-    getTranslations({ locale, namespace: "boxes" }),
-    getTranslations({ locale, namespace: "store" }),
-    getTranslations({ locale, namespace: "store.badges" }),
-    listCatalogBundles(),
-  ]);
+  const t = await getTranslations({ locale, namespace: "boxes" });
 
   return (
     // A ledger row only reads as one row if its ends stay within a glance of
@@ -51,7 +48,9 @@ export default async function BoxesPage({ params }: { params: Promise<{ locale: 
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="mb-2 flex items-baseline justify-between gap-4 border-b border-border pb-4">
         <h1 className="font-display text-2xl font-medium text-ink sm:text-3xl">{t("heading")}</h1>
-        <p className="shrink-0 text-xs text-ink-soft">{t("resultCount", { count: bundleList.length })}</p>
+        <Suspense fallback={<span className="h-4 w-20 shrink-0" />}>
+          <BoxCount locale={locale} />
+        </Suspense>
       </div>
       {/* The home section carries a line explaining what a box *is*; the
           destination page dropped it and opened with a bare count — leaving
@@ -59,66 +58,75 @@ export default async function BoxesPage({ params }: { params: Promise<{ locale: 
           and withholding it from the ones who clicked through to find out. */}
       <p className="mt-4 mb-2 max-w-md text-sm leading-relaxed text-ink-soft">{t("intro")}</p>
 
-      {bundleList.length > 0 ? (
-        <ul>
-          {bundleList.map((bundle) => {
-            const name = localized(locale, bundle.nameAr, bundle.nameFr);
-            return (
-              <li key={bundle.id} className="border-b border-border">
-                <Link href={`/boxes/${bundle.slug}`} className="group flex items-center gap-5 py-5">
-                  <div className="flex size-20 shrink-0 items-center justify-center border border-border p-3 transition-colors group-hover:border-ink sm:size-24">
-                    {bundle.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed card transform
-                      <img
-                        src={buildCloudinaryUrl(bundle.image, "thumbnail")}
-                        srcSet={buildCloudinarySrcSet(bundle.image, ["thumbnail", "card"])}
-                        sizes="96px"
-                        alt=""
-                        width={120}
-                        height={120}
-                        loading="lazy"
-                        decoding="async"
-                        className="size-full object-contain mix-blend-multiply"
-                      />
-                    ) : (
-                      <Gift className="size-7 text-ink-soft" aria-hidden="true" />
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-base font-medium text-ink sm:text-lg">{name}</span>
-                    <span className="mt-1 block font-mono text-xs text-ink-soft">
-                      {tStore("itemCount", { count: bundle.itemCount })}
-                    </span>
-                    <div className="mt-1.5">
-                      <BundleAvailabilityBadge maxSellable={bundle.maxSellable} label={tBadges("outOfStock")} />
-                    </div>
-                  </div>
-
-                  {/* A fixed end column with tabular figures, so prices form a
-                      real column across rows instead of each floating wherever
-                      its own digit count lands — the reason Geist Mono is the
-                      numeral face in the first place. */}
-                  <span className="shrink-0 text-end font-mono text-base tabular-nums text-ink sm:min-w-32 sm:text-lg">
-                    {formatMoney(bundle.effectivePrice)}
-                  </span>
-
-                  {/* The row is the primary action on this page and had no
-                      affordance at all: a photo, a name, a price, a hairline.
-                      PRODUCT.md rules out inferred affordances for this
-                      audience, and this is the shop's highest-value sale. */}
-                  <ChevronRight
-                    className="size-5 shrink-0 text-ink-soft transition-colors group-hover:text-ink rtl:rotate-180"
-                    aria-hidden="true"
-                  />
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="pt-8 text-sm text-ink-soft">{t("empty")}</p>
-      )}
+      {/* The heading and the explanation of what a box *is* are the static
+          shell; only the ledger waits on the query. */}
+      <Suspense fallback={<BundleListSkeleton count={4} />}>
+        <BoxLedger locale={locale} />
+      </Suspense>
     </div>
+  );
+}
+
+async function BoxCount({ locale }: { locale: string }) {
+  const [t, bundleList] = await Promise.all([
+    getTranslations({ locale, namespace: "boxes" }),
+    listCatalogBundles(),
+  ]);
+  return <p className="shrink-0 text-xs text-ink-soft">{t("resultCount", { count: bundleList.length })}</p>;
+}
+
+async function BoxLedger({ locale }: { locale: string }) {
+  const [t, tStore, tBadges, bundleList] = await Promise.all([
+    getTranslations({ locale, namespace: "boxes" }),
+    getTranslations({ locale, namespace: "store" }),
+    getTranslations({ locale, namespace: "store.badges" }),
+    listCatalogBundles(),
+  ]);
+
+  if (bundleList.length === 0) return <p className="pt-8 text-sm text-ink-soft">{t("empty")}</p>;
+
+  return (
+    <ul>
+      {bundleList.map((bundle) => {
+        const name = localized(locale, bundle.nameAr, bundle.nameFr);
+        return (
+          <li key={bundle.id} className="border-b border-border">
+            <Link href={`/boxes/${bundle.slug}`} className="group flex items-center gap-5 py-5">
+              <div className="flex size-20 shrink-0 items-center justify-center border border-border p-3 transition-colors group-hover:border-ink sm:size-24">
+                {bundle.image ? (
+                  <ProductImage publicId={bundle.image} sizes="(max-width: 640px) 80px, 96px" />
+                ) : (
+                  <Gift className="size-7 text-ink-soft" aria-hidden="true" />
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <span className="block text-base font-medium text-ink sm:text-lg">{name}</span>
+                <span className="mt-1 block font-mono text-xs text-ink-soft">
+                  {tStore("itemCount", { count: bundle.itemCount })}
+                </span>
+                <div className="mt-1.5">
+                  <BundleAvailabilityBadge maxSellable={bundle.maxSellable} label={tBadges("outOfStock")} />
+                </div>
+              </div>
+
+              {/* A fixed end column with tabular figures, so prices form a real
+                  column across rows instead of each floating wherever its own
+                  digit count lands. */}
+              <span className="shrink-0 text-end font-mono text-base tabular-nums text-ink sm:min-w-32 sm:text-lg">
+                {formatMoney(bundle.effectivePrice)}
+              </span>
+
+              {/* The row is the primary action on this page and had no
+                  affordance at all: a photo, a name, a price, a hairline. */}
+              <ChevronRight
+                className="size-5 shrink-0 text-ink-soft transition-colors group-hover:text-ink rtl:rotate-180"
+                aria-hidden="true"
+              />
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

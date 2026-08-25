@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -45,6 +45,10 @@ export const products = pgTable(
   (table) => [
     index("products_category_id_idx").on(table.categoryId),
     index("products_is_active_idx").on(table.isActive),
+    // Every storefront listing orders by `created_at desc` — the featured
+    // row, the catalog grid, each category page. Without this each one is a
+    // sort over the whole active catalog.
+    index("products_created_at_idx").on(desc(table.createdAt)),
     // A backorder-enabled product is allowed to go negative (task 13: a
     // confirmed backorder line still decrements stock, visibly, past zero) —
     // every other product still can't.
@@ -55,15 +59,22 @@ export const products = pgTable(
   ],
 );
 
-export const productImages = pgTable("product_images", {
-  id: id(),
-  productId: uuid("product_id")
-    .notNull()
-    .references(() => products.id, { onDelete: "cascade" }),
-  publicId: text("public_id").notNull(),
-  sort: integer("sort").notNull().default(0),
-  ...timestamps,
-});
+export const productImages = pgTable(
+  "product_images",
+  {
+    id: id(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    publicId: text("public_id").notNull(),
+    sort: integer("sort").notNull().default(0),
+    ...timestamps,
+  },
+  // Postgres does not index a foreign key for you. `firstImagesByProduct`
+  // runs an `IN (...)` over this column on every card listing there is, and
+  // the cascade delete on the parent scans it too.
+  (table) => [index("product_images_product_id_idx").on(table.productId, table.sort)],
+);
 
 // No non-negative check on `stockQty` here (unlike `products`): a variant's
 // own `allowBackorder` isn't a column on this row, it's inherited from the
@@ -71,27 +82,35 @@ export const productImages = pgTable("product_images", {
 // backorder-enabled variant going negative (task 13) is enforced in the
 // service layer instead, same as the non-backorder floor for a shared-stock
 // variant (`stockQty: null`), which lives on the parent row.
-export const productVariants = pgTable("product_variants", {
-  id: id(),
-  productId: uuid("product_id")
-    .notNull()
-    .references(() => products.id, { onDelete: "cascade" }),
-  nameAr: text("name_ar").notNull(),
-  nameFr: text("name_fr").notNull(),
-  colorHex: text("color_hex"),
-  sku: text("sku").notNull().unique(),
-  // null = use product stock
-  stockQty: integer("stock_qty"),
-  isActive: boolean("is_active").notNull().default(true),
-  ...timestamps,
-});
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: id(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    nameAr: text("name_ar").notNull(),
+    nameFr: text("name_fr").notNull(),
+    colorHex: text("color_hex"),
+    sku: text("sku").notNull().unique(),
+    // null = use product stock
+    stockQty: integer("stock_qty"),
+    isActive: boolean("is_active").notNull().default(true),
+    ...timestamps,
+  },
+  (table) => [index("product_variants_product_id_idx").on(table.productId)],
+);
 
-export const variantImages = pgTable("variant_images", {
-  id: id(),
-  variantId: uuid("variant_id")
-    .notNull()
-    .references(() => productVariants.id, { onDelete: "cascade" }),
-  publicId: text("public_id").notNull(),
-  sort: integer("sort").notNull().default(0),
-  ...timestamps,
-});
+export const variantImages = pgTable(
+  "variant_images",
+  {
+    id: id(),
+    variantId: uuid("variant_id")
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "cascade" }),
+    publicId: text("public_id").notNull(),
+    sort: integer("sort").notNull().default(0),
+    ...timestamps,
+  },
+  (table) => [index("variant_images_variant_id_idx").on(table.variantId, table.sort)],
+);

@@ -453,22 +453,57 @@ export async function updateProductCore(
     return { ok: false, error: { code: "CONFLICT", message: messages.slugTaken } };
   }
 
-  await db
-    .update(products)
-    .set({
-      nameAr: parsed.data.nameAr,
-      nameFr: parsed.data.nameFr,
-      descriptionAr: parsed.data.descriptionAr ?? null,
-      descriptionFr: parsed.data.descriptionFr ?? null,
-      slug,
-      categoryId: parsed.data.categoryId,
-      price: parsed.data.price,
-      discountPrice: parsed.data.discountPrice ?? null,
-      lowStockThreshold: parsed.data.lowStockThreshold,
-      allowBackorder: parsed.data.allowBackorder,
-      isActive: parsed.data.isActive,
-    })
-    .where(eq(products.id, id));
+  const existingVariants = parsed.data.variants.filter(
+    (v): v is VariantInput & { id: string } => !!v.id,
+  );
+  const existingVariantIds = existingVariants.map((variant) => variant.id);
+
+  /*
+   * The product row, plus everything the image reconciliation below needs to
+   * read, in ONE round trip.
+   *
+   * This used to be a sequence of `await db...` statements with a per-variant
+   * loop inside it — four more round trips for every variant on the product.
+   * On the `neon-http` driver each of those is a separate HTTPS request, so a
+   * product with five variants spent twenty-odd network round trips saving
+   * once. `db.batch` sends them together and, as a bonus, runs them in a
+   * single transaction — which `db.transaction()` cannot do on this driver at
+   * all.
+   *
+   * The per-variant queries collapse into set-based ones: `inArray` over the
+   * submitted variant ids instead of one query each, grouped in JS afterwards.
+   * `ownedVariantRows` preserves the guard the old `.returning()` check
+   * provided — a crafted payload naming a variant of a *different* product
+   * must not rename or re-image it — by resolving ownership first and
+   * touching only what comes back.
+   */
+  const [, previousImages, ownedVariantRows, previousVariantImageRows] = await db.batch([
+    db
+      .update(products)
+      .set({
+        nameAr: parsed.data.nameAr,
+        nameFr: parsed.data.nameFr,
+        descriptionAr: parsed.data.descriptionAr ?? null,
+        descriptionFr: parsed.data.descriptionFr ?? null,
+        slug,
+        categoryId: parsed.data.categoryId,
+        price: parsed.data.price,
+        discountPrice: parsed.data.discountPrice ?? null,
+        lowStockThreshold: parsed.data.lowStockThreshold,
+        allowBackorder: parsed.data.allowBackorder,
+        isActive: parsed.data.isActive,
+      })
+      .where(eq(products.id, id)),
+    db.select({ publicId: productImages.publicId }).from(productImages).where(eq(productImages.productId, id)),
+    db
+      .select({ id: productVariants.id })
+      .from(productVariants)
+      .where(and(inArray(productVariants.id, existingVariantIds), eq(productVariants.productId, id))),
+    db
+      .select({ variantId: variantImages.variantId, publicId: variantImages.publicId })
+      .from(variantImages)
+      .where(inArray(variantImages.variantId, existingVariantIds)),
+  ]);
 
   // Deactivating a product here (via the edit form's "active" checkbox, not
   // just the list's quick toggle below) cascades the same way — a bundle
@@ -484,53 +519,53 @@ export async function updateProductCore(
   // at an image that no longer existed.
   const orphaned: string[] = [];
 
-  const previousImages = await db
-    .select({ publicId: productImages.publicId })
-    .from(productImages)
-    .where(eq(productImages.productId, id));
   const keptImages = new Set(parsed.data.images);
   orphaned.push(...previousImages.map((row) => row.publicId).filter((publicId) => !keptImages.has(publicId)));
 
-  await db.delete(productImages).where(eq(productImages.productId, id));
-  if (parsed.data.images.length) {
-    await db
-      .insert(productImages)
-      .values(parsed.data.images.map((publicId, sort) => ({ productId: id, publicId, sort })));
-  }
+  const ownedVariantIds = new Set(ownedVariantRows.map((row) => row.id));
+  const ownedVariants = existingVariants.filter((variant) => ownedVariantIds.has(variant.id));
 
-  const existingVariants = parsed.data.variants.filter(
-    (v): v is VariantInput & { id: string } => !!v.id,
-  );
-  for (const variant of existingVariants) {
-    // Scoped to this product. `WHERE id = ...` alone let a crafted payload
-    // rename or re-image a variant belonging to a different product.
-    const updated = await db
-      .update(productVariants)
-      .set({
-        nameAr: variant.nameAr,
-        nameFr: variant.nameFr,
-        colorHex: variant.colorHex ?? null,
-      })
-      .where(and(eq(productVariants.id, variant.id), eq(productVariants.productId, id)))
-      .returning({ id: productVariants.id });
-    if (!updated.length) continue;
-
-    const previousVariantImages = await db
-      .select({ publicId: variantImages.publicId })
-      .from(variantImages)
-      .where(eq(variantImages.variantId, variant.id));
+  for (const variant of ownedVariants) {
     const keptVariantImages = new Set(variant.images);
     orphaned.push(
-      ...previousVariantImages.map((row) => row.publicId).filter((publicId) => !keptVariantImages.has(publicId)),
+      ...previousVariantImageRows
+        .filter((row) => row.variantId === variant.id && !keptVariantImages.has(row.publicId))
+        .map((row) => row.publicId),
     );
-
-    await db.delete(variantImages).where(eq(variantImages.variantId, variant.id));
-    if (variant.images.length) {
-      await db
-        .insert(variantImages)
-        .values(variant.images.map((publicId, sort) => ({ variantId: variant.id, publicId, sort })));
-    }
   }
+
+  const variantImageRows = ownedVariants.flatMap((variant) =>
+    variant.images.map((publicId, sort) => ({ variantId: variant.id, publicId, sort })),
+  );
+
+  // Second and last round trip for the write side: replace both image sets and
+  // rename the owned variants together, in statement order, in one
+  // transaction. Deletes precede inserts so a reordered image list can reuse
+  // the same public_ids without tripping over itself.
+  await db.batch([
+    db.delete(productImages).where(eq(productImages.productId, id)),
+    db.delete(variantImages).where(inArray(variantImages.variantId, [...ownedVariantIds])),
+    ...(parsed.data.images.length
+      ? [
+          db
+            .insert(productImages)
+            .values(parsed.data.images.map((publicId, sort) => ({ productId: id, publicId, sort }))),
+        ]
+      : []),
+    ...(variantImageRows.length ? [db.insert(variantImages).values(variantImageRows)] : []),
+    ...ownedVariants.map((variant) =>
+      db
+        .update(productVariants)
+        .set({
+          nameAr: variant.nameAr,
+          nameFr: variant.nameFr,
+          colorHex: variant.colorHex ?? null,
+        })
+        // Still scoped to this product, belt and braces alongside the
+        // ownership resolution above.
+        .where(and(eq(productVariants.id, variant.id), eq(productVariants.productId, id))),
+    ),
+  ] as unknown as Parameters<typeof db.batch>[0]);
 
   await insertNewVariants(id, parsed.data.variants, actorId);
 

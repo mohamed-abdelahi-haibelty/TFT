@@ -4,6 +4,7 @@ import { Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { useCartDrawer } from "@/components/store/cart-drawer-context";
+import { ProductImage } from "@/components/store/product-image";
 import { Link } from "@/src/i18n/navigation";
 import {
   CART_UPDATED_EVENT,
@@ -14,7 +15,6 @@ import {
   removeFromCart,
   setCartItemQty,
 } from "@/src/lib/cart";
-import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 
 /**
@@ -163,16 +163,7 @@ export function CartDrawer() {
                 <li key={line.key} className="flex gap-4 border-b border-border py-4">
                   <div className="flex size-16 shrink-0 items-center justify-center border border-border p-2">
                     {line.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- Cloudinary delivery URL, fixed size transform
-                      <img
-                        src={buildCloudinaryUrl(line.image, "thumbnail")}
-                        alt=""
-                        width={120}
-                        height={120}
-                        loading="lazy"
-                        decoding="async"
-                        className="size-full object-contain mix-blend-multiply"
-                      />
+                      <ProductImage publicId={line.image} sizes="64px" />
                     ) : (
                       <ShoppingBag className="size-6 text-ink-soft" aria-hidden="true" />
                     )}

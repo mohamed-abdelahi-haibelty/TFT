@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, lte, lt, ne, sql } from "drizzle-orm";
-import { unstable_cache } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/src/db/client";
 import { orderItems, orders, productVariants, products } from "@/src/db/schema";
 import type { ServiceResult } from "@/src/lib/errors";
@@ -72,11 +72,11 @@ export type DashboardPendingOrder = {
   status: OrderStatusValue;
   customerName: string | null;
   total: number;
-  // ISO string, not `Date` — `unstable_cache` JSON-serializes its cached
-  // return value, so a `Date` here would come back a bare string on every
-  // read after the first, only failing once a cache entry is actually
-  // reused (a `new Date(order.createdAt)` at the render site is the fix,
-  // never trusting the type through a cache boundary).
+  // ISO string, not `Date` — a cached scope serializes its return value,
+  // so a `Date` here would come back a bare string on every read after the
+  // first, only failing once a cache entry is actually reused (a
+  // `new Date(order.createdAt)` at the render site is the fix, never
+  // trusting the type through a cache boundary).
   createdAt: string;
 };
 
@@ -255,10 +255,10 @@ export async function getDashboardStatsCore(monthKey: string): Promise<Dashboard
 }
 
 async function getDashboardStatsCached(monthKey: string): Promise<DashboardStats> {
-  return unstable_cache(() => getDashboardStatsCore(monthKey), ["admin-dashboard-stats", monthKey], {
-    tags: [dashboardMonthTag(monthKey)],
-    revalidate: 300,
-  })();
+  "use cache";
+  cacheLife("minutes");
+  cacheTag(dashboardMonthTag(monthKey));
+  return getDashboardStatsCore(monthKey);
 }
 
 export async function getDashboardStats(monthParam?: string): Promise<ServiceResult<DashboardStats>> {
