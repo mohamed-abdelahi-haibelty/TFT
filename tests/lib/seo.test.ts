@@ -37,10 +37,16 @@ describe("buildPageMetadata", () => {
     expect(meta.twitter).toMatchObject({ card: "summary_large_image", title: "T", description: "D" });
   });
 
-  it("leaves images unset so the route's opengraph-image file fills in", async () => {
+  // Next only auto-injects the file-based image when a page leaves `openGraph`
+  // alone, and every page here builds its own — so the card is named by hand.
+  it("falls back to the brand share card when a page has no image of its own", async () => {
     const meta = await buildPageMetadata({ locale: "fr", title: "T" });
-    expect(meta.openGraph && "images" in meta.openGraph).toBe(false);
-    expect(meta.twitter && "images" in meta.twitter).toBe(false);
+    expect(meta.openGraph).toMatchObject({
+      images: [{ url: `${siteOrigin()}/fr/opengraph-image`, width: 1200, height: 630 }],
+    });
+    expect(meta.twitter).toMatchObject({
+      images: [{ url: `${siteOrigin()}/fr/opengraph-image` }],
+    });
   });
 
   it("carries an explicit image through to both cards", async () => {

@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { routing } from "@/src/i18n/routing";
+import { OG_IMAGE_ALT, OG_IMAGE_SIZE } from "@/src/lib/seo";
 
 /**
  * The share card for every page that does not supply its own image — the home
@@ -17,9 +18,11 @@ import { routing } from "@/src/i18n/routing";
  * outside `public/`. The brand reads the same in both locales, so the wordmark
  * carries the card until that font exists.
  */
-export const size = { width: 1200, height: 630 };
+// Size and alt live in src/lib/seo.ts, which is what actually puts the
+// `og:image` tags on the page — see the note there.
+export const size = OG_IMAGE_SIZE;
 export const contentType = "image/png";
-export const alt = "TFT — THE FIRST TRADE · Nouadhibou";
+export const alt = OG_IMAGE_ALT;
 
 const PAPER = "#FAF9F7";
 const INK = "#1A1613";

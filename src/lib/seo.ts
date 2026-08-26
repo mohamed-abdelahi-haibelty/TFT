@@ -13,6 +13,27 @@ function ogLocale(locale: string): string {
   return OG_LOCALES[locale] ?? locale;
 }
 
+/**
+ * The share card served by `app/[locale]/opengraph-image.tsx`, named here so
+ * the route and the metadata cannot drift apart.
+ *
+ * It has to be named *explicitly* rather than left to Next's file convention:
+ * every page below builds its own `openGraph` object, and a child's
+ * `openGraph` replaces the parent's wholesale — which took the auto-injected
+ * image with it. The deployed home page and all three listing pages shipped
+ * with no `og:image` at all until this was passed by hand.
+ */
+export const OG_IMAGE_SIZE = { width: 1200, height: 630 };
+export const OG_IMAGE_ALT = "TFT — THE FIRST TRADE · Nouadhibou";
+
+function defaultOgImage(locale: string) {
+  return {
+    url: absoluteUrl(locale, "/opengraph-image"),
+    ...OG_IMAGE_SIZE,
+    alt: OG_IMAGE_ALT,
+  };
+}
+
 export type PageMetadataInput = {
   locale: string;
   /** Storefront path with no locale prefix, e.g. `/catalog`. Defaults to the home page. */
@@ -49,10 +70,10 @@ export async function buildPageMetadata({
 }: PageMetadataInput): Promise<Metadata> {
   const t = await getTranslations({ locale, namespace: "common" });
   const url = absoluteUrl(locale, path);
-  // Spreading a conditional keeps the key absent rather than present-and-
-  // undefined: Next fills `openGraph.images` from the route's
-  // `opengraph-image` file only when the exported metadata leaves it unset.
-  const imageEntry = images?.length ? { images } : {};
+  // A page-specific image (a product photo) when there is one, the brand card
+  // otherwise. Never nothing: WhatsApp is this shop's real distribution
+  // channel, and a pasted link with no card is a bare URL in a chat.
+  const imageEntry = { images: images?.length ? images : [defaultOgImage(locale)] };
 
   return {
     title,
