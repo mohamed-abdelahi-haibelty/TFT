@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CatalogShellSkeleton, CatalogView } from "@/app/[locale]/(store)/catalog/_view";
-import { absoluteUrl, localeAlternates } from "@/src/lib/site";
+import { buildPageMetadata } from "@/src/lib/seo";
 
 export async function generateMetadata({
   params,
@@ -12,11 +12,12 @@ export async function generateMetadata({
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "catalog.seo" });
 
-  return {
+  return buildPageMetadata({
+    locale,
+    path: "/catalog",
     title: t("title"),
     description: t("description"),
-    alternates: { canonical: absoluteUrl(locale, "/catalog"), languages: localeAlternates("/catalog") },
-  };
+  });
 }
 
 /**

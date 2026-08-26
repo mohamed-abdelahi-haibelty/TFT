@@ -707,18 +707,34 @@ async function getStorefrontBundleBySlugCached(slug: string): Promise<Storefront
 
 export const getStorefrontBundleBySlug = cache(getStorefrontBundleBySlugCached);
 
+export type SitemapEntry = { slug: string; updatedAt: Date };
+/** Products carry their category so `app/sitemap.ts` can date a category page by its newest product rather than by the near-immutable category row. */
+export type SitemapProductEntry = SitemapEntry & { categorySlug: string };
+
 export type SitemapCatalog = {
-  categories: { slug: string }[];
-  products: { slug: string }[];
-  bundles: { slug: string }[];
+  categories: SitemapEntry[];
+  products: SitemapProductEntry[];
+  bundles: SitemapEntry[];
 };
 
-/** Slugs only, for `app/sitemap.ts` — active items across both storefront locales. */
+/**
+ * Slugs and modification dates for `app/sitemap.ts` — active items across both
+ * storefront locales.
+ *
+ * `updatedAt` is what makes `<lastmod>` truthful, and a truthful `<lastmod>` is
+ * the one hint in a sitemap that Google acts on: it is how a repriced product
+ * gets recrawled without waiting out the normal cycle. `changefreq` and
+ * `priority` are not emitted anywhere, because Google ignores both.
+ */
 export async function getSitemapCatalogCore(): Promise<SitemapCatalog> {
   const [categoryRows, productRows, bundleRows] = await Promise.all([
-    db.select({ slug: categories.slug }).from(categories),
-    db.select({ slug: products.slug }).from(products).where(eq(products.isActive, true)),
-    db.select({ slug: bundles.slug }).from(bundles).where(eq(bundles.isActive, true)),
+    db.select({ slug: categories.slug, updatedAt: categories.updatedAt }).from(categories),
+    db
+      .select({ slug: products.slug, updatedAt: products.updatedAt, categorySlug: categories.slug })
+      .from(products)
+      .innerJoin(categories, eq(products.categoryId, categories.id))
+      .where(eq(products.isActive, true)),
+    db.select({ slug: bundles.slug, updatedAt: bundles.updatedAt }).from(bundles).where(eq(bundles.isActive, true)),
   ]);
 
   return { categories: categoryRows, products: productRows, bundles: bundleRows };

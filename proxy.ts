@@ -27,5 +27,10 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
+  // `icon` and `apple-icon` are Next's file-based metadata routes and, unlike
+  // `favicon.ico` / `sitemap.xml` / `manifest.webmanifest`, their paths carry
+  // no dot — so the catch-all below was locale-prefixing them into
+  // `/ar/icon`, which 404s. Every `<link rel="icon">` on the site pointed at
+  // a redirect to nothing.
+  matcher: ["/((?!api|_next|_vercel|icon|apple-icon|.*\\..*).*)"],
 };

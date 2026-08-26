@@ -4,11 +4,14 @@ import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BundleInteractive } from "@/components/store/bundle-interactive";
 import { BundleDetailSkeleton } from "@/components/store/skeletons";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Link } from "@/src/i18n/navigation";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
 import { formatMoney } from "@/src/lib/money";
-import { absoluteUrl, localeAlternates } from "@/src/lib/site";
+import { buildPageMetadata, NOINDEX } from "@/src/lib/seo";
+import { breadcrumbJsonLd, productJsonLd } from "@/src/lib/structured-data";
+import { absoluteUrl } from "@/src/lib/site";
 import { getSitemapCatalogCore, getStorefrontBundleBySlug } from "@/src/services/storefront";
 
 export async function generateMetadata({
@@ -18,27 +21,22 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale, slug } = await params;
   const bundle = await getStorefrontBundleBySlug(slug);
-  if (!bundle) return {};
+  // See the product page's twin: `{}` on a 404 inherited the site-wide title
+  // and description, leaving an indexable duplicate of the home page.
+  if (!bundle) return NOINDEX;
 
   const name = localized(locale, bundle.nameAr, bundle.nameFr);
   const description = localized(locale, bundle.descriptionAr ?? "", bundle.descriptionFr ?? "") || undefined;
-  const path = `/boxes/${bundle.slug}`;
   const image = bundle.images[0] ? buildCloudinaryUrl(bundle.images[0], "gallery") : undefined;
 
-  return {
+  // See the product page for why there are no `product:price:*` tags here.
+  return buildPageMetadata({
+    locale,
+    path: `/boxes/${bundle.slug}`,
     title: name,
     description,
-    alternates: { canonical: absoluteUrl(locale, path), languages: localeAlternates(path) },
-    openGraph: {
-      title: name,
-      description,
-      url: absoluteUrl(locale, path),
-      siteName: "TFT",
-      locale,
-      type: "website",
-      ...(image ? { images: [image] } : {}),
-    },
-  };
+    images: image ? [image] : undefined,
+  });
 }
 
 /** Same shape as the product page — see its comment. */
@@ -78,20 +76,7 @@ async function BundleBody({ params }: { params: Promise<{ locale: string; slug: 
   const name = localized(locale, bundle.nameAr, bundle.nameFr);
   const description = localized(locale, bundle.descriptionAr ?? "", bundle.descriptionFr ?? "");
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name,
-    ...(description ? { description } : {}),
-    ...(bundle.images.length ? { image: bundle.images.map((id) => buildCloudinaryUrl(id, "gallery")) } : {}),
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "MRU",
-      price: bundle.effectivePrice,
-      availability: `https://schema.org/${bundle.maxSellable === 0 ? "OutOfStock" : "InStock"}`,
-      url: absoluteUrl(locale, `/boxes/${bundle.slug}`),
-    },
-  };
+  const bundleUrl = absoluteUrl(locale, `/boxes/${bundle.slug}`);
 
   return (
     // `max-w-4xl`, not `6xl`: this page's content is a 320px gallery, a
@@ -100,7 +85,20 @@ async function BundleBody({ params }: { params: Promise<{ locale: string; slug: 
     // beside them, and the manifest's names ended ~500px from their own
     // prices — which breaks the one thing the manifest exists to prove.
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <JsonLd
+        data={productJsonLd({
+          name,
+          url: bundleUrl,
+          price: bundle.effectivePrice,
+          // A box has no stock row of its own — it is sellable only as deep as
+          // its scarcest component, which `maxSellable` already resolves.
+          availability: bundle.maxSellable === 0 ? "out-of-stock" : "in-stock",
+          description: description || undefined,
+          images: bundle.images.map((id) => buildCloudinaryUrl(id, "gallery")),
+          priceValidUntil: bundle.promo ? new Date(bundle.promo.endsAt).toISOString() : undefined,
+        })}
+      />
+      <JsonLd data={breadcrumbJsonLd([{ name: tNav("boxes"), url: absoluteUrl(locale, "/boxes") }, { name }])} />
 
       <nav aria-label={t("breadcrumbLabel")} className="mb-8 flex items-center gap-2 text-xs text-ink-soft uppercase">
         <Link href="/boxes" className="tracking-[0.04em] transition-colors hover:text-ink">

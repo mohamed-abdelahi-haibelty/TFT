@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { ToastProvider } from "@/components/ui/toast";
 import { ADMIN_MESSAGE_NAMESPACES, pickMessages } from "@/src/i18n/messages";
+import { NOINDEX } from "@/src/lib/seo";
 import { requireUser } from "@/src/services/authz";
 
 /**
@@ -19,6 +21,14 @@ import { requireUser } from "@/src/services/authz";
  * allowed to block, which is where the speed comes from.
  */
 export const instant = false;
+
+/**
+ * Layout metadata merges field by field into every page below, so this one
+ * export covers all twenty-odd admin routes without touching each of them.
+ * `robots.txt` alone never stopped indexing — it stops *crawling*, and a URL
+ * someone links to can still be indexed from the link text.
+ */
+export const metadata: Metadata = NOINDEX;
 
 export default async function ProtectedAdminLayout({
   children,

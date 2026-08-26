@@ -5,8 +5,11 @@ import { CatalogFilters, type CatalogFilterValues } from "@/components/store/cat
 import { CategoryChip } from "@/components/store/category-chip";
 import { CatalogResultsSkeleton, ProductGridSkeleton } from "@/components/store/skeletons";
 import { ProductCard } from "@/components/store/product-card";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Link } from "@/src/i18n/navigation";
 import { localized } from "@/src/lib/locale-text";
+import { itemListJsonLd } from "@/src/lib/structured-data";
+import { absoluteUrl } from "@/src/lib/site";
 import {
   getStorefrontCategories,
   listCatalogProducts,
@@ -93,6 +96,10 @@ export async function CatalogView({
   const productsPromise = listCatalogProducts(filters);
 
   const action = categorySlug ? `/${locale}/catalog/${categorySlug}` : `/${locale}/catalog`;
+  // The unfiltered path, which is also what `generateMetadata` sets as this
+  // page's canonical — a `?q=`/`?sort=` variant points back here, so the list
+  // is described against the URL that actually gets indexed.
+  const listUrl = absoluteUrl(locale, categorySlug ? `/catalog/${categorySlug}` : "/catalog");
   const heading = activeCategory ? localized(locale, activeCategory.nameAr, activeCategory.nameFr) : t("heading.all");
 
   return (
@@ -133,7 +140,7 @@ export async function CatalogView({
       {/* The filter form and category rail above are usable the moment they
           paint; only the grid waits on the query. */}
       <Suspense fallback={<ProductGridSkeleton count={8} />}>
-        <CatalogGrid locale={locale} products={productsPromise} />
+        <CatalogGrid locale={locale} products={productsPromise} listUrl={listUrl} />
       </Suspense>
     </div>
   );
@@ -149,7 +156,15 @@ async function ResultCount({ locale, products }: { locale: string; products: Pro
   return <p className="shrink-0 text-xs text-ink-soft">{t("resultCount", { count: productList.length })}</p>;
 }
 
-async function CatalogGrid({ locale, products }: { locale: string; products: ProductsPromise }) {
+async function CatalogGrid({
+  locale,
+  products,
+  listUrl,
+}: {
+  locale: string;
+  products: ProductsPromise;
+  listUrl: string;
+}) {
   const [t, productList] = await Promise.all([
     getTranslations({ locale, namespace: "catalog" }),
     products,
@@ -158,15 +173,29 @@ async function CatalogGrid({ locale, products }: { locale: string; products: Pro
   if (productList.length === 0) return <p className="text-sm text-ink-soft">{t("empty")}</p>;
 
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 md:grid-cols-4">
-      {productList.map((product) => (
-        <ProductCard
-          key={product.id}
-          product={product}
-          name={localized(locale, product.nameAr, product.nameFr)}
-          locale={locale}
-        />
-      ))}
-    </div>
+    <>
+      {/* Names the set of URLs this page is *about*. The grid is rendered here
+          rather than in the page shell because this is where the query has
+          actually resolved. */}
+      <JsonLd
+        data={itemListJsonLd({
+          url: listUrl,
+          items: productList.map((product) => ({
+            name: localized(locale, product.nameAr, product.nameFr),
+            url: absoluteUrl(locale, `/product/${product.slug}`),
+          })),
+        })}
+      />
+      <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 md:grid-cols-4">
+        {productList.map((product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            name={localized(locale, product.nameAr, product.nameFr)}
+            locale={locale}
+          />
+        ))}
+      </div>
+    </>
   );
 }

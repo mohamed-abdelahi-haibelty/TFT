@@ -61,7 +61,7 @@ Required in production:
 | `BETTER_AUTH_URL` | The deployed origin, e.g. `https://theFirstTrade.mr`. |
 | `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Public/client-safe. |
 | `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Server-only. Sign uploads and deletes. |
-| `NEXT_PUBLIC_SITE_URL` | Drives canonical URLs, OpenGraph and `sitemap.xml`. Wrong or unset here means wrong absolute URLs in search results. |
+| `NEXT_PUBLIC_SITE_URL` | Drives canonical URLs, OpenGraph and `sitemap.xml`. **Optional now**: unset, `siteOrigin()` falls back to `https://$VERCEL_PROJECT_PRODUCTION_URL` (Vercel injects that itself), so a deploy without it emits real indexable URLs rather than `localhost`. Set it the day a custom domain exists — it wins over the fallback, and a wrong value here is still wrong absolute URLs in search results. |
 | `NEXT_PUBLIC_WHATSAPP_NUMBER` | Digits only, no `+`. `222XXXXXXXX`. Concatenated straight into `wa.me/<number>`. |
 
 Optional (everything degrades gracefully when unset):

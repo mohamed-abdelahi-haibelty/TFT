@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { TrackView } from "@/app/[locale]/(store)/track/_view";
-import { absoluteUrl, localeAlternates } from "@/src/lib/site";
+import { buildPageMetadata, NOINDEX } from "@/src/lib/seo";
 
 export async function generateMetadata({
   params,
@@ -12,13 +12,14 @@ export async function generateMetadata({
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "track.seo" });
 
-  return {
+  return buildPageMetadata({
+    locale,
+    path: "/track",
     title: t("title"),
     description: t("description"),
-    alternates: { canonical: absoluteUrl(locale, "/track"), languages: localeAlternates("/track") },
     // A per-customer lookup, not a catalog page — nothing here should ever rank, same posture as checkout.
-    robots: { index: false, follow: false },
-  };
+    extra: NOINDEX,
+  });
 }
 
 export default async function TrackPage({

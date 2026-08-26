@@ -4,10 +4,13 @@ import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ProductInteractive } from "@/components/store/product-interactive";
 import { ProductDetailSkeleton } from "@/components/store/skeletons";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Link } from "@/src/i18n/navigation";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
-import { absoluteUrl, localeAlternates } from "@/src/lib/site";
+import { buildPageMetadata, NOINDEX } from "@/src/lib/seo";
+import { breadcrumbJsonLd, productJsonLd } from "@/src/lib/structured-data";
+import { absoluteUrl } from "@/src/lib/site";
 import { deriveStockStatus } from "@/src/lib/stock-status";
 import { getShopSettings } from "@/src/services/settings";
 import { getSitemapCatalogCore, getStorefrontProductBySlug } from "@/src/services/storefront";
@@ -19,27 +22,28 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale, slug } = await params;
   const product = await getStorefrontProductBySlug(slug);
-  if (!product) return {};
+  // A slug with no product renders `notFound()` below. Returning `{}` here
+  // left it inheriting the site-wide title and description, i.e. an indexable
+  // duplicate of the home page's metadata on a 404.
+  if (!product) return NOINDEX;
 
   const name = localized(locale, product.nameAr, product.nameFr);
   const description = localized(locale, product.descriptionAr ?? "", product.descriptionFr ?? "") || undefined;
-  const path = `/product/${product.slug}`;
   const image = product.images[0] ? buildCloudinaryUrl(product.images[0], "gallery") : undefined;
 
-  return {
+  // No `og:type: product` and no `product:price:*` tags: Next's typed
+  // `openGraph.type` union has no "product" member, and its `other` escape
+  // hatch renders `<meta name>` where the OpenGraph vertical requires
+  // `<meta property>` — scrapers ignore the `name` form, so those tags would
+  // be decoration. Price and availability travel in the Product JSON-LD
+  // below, which is what actually feeds a rich result.
+  return buildPageMetadata({
+    locale,
+    path: `/product/${product.slug}`,
     title: name,
     description,
-    alternates: { canonical: absoluteUrl(locale, path), languages: localeAlternates(path) },
-    openGraph: {
-      title: name,
-      description,
-      url: absoluteUrl(locale, path),
-      siteName: "TFT",
-      locale,
-      type: "website",
-      ...(image ? { images: [image] } : {}),
-    },
-  };
+    images: image ? [image] : undefined,
+  });
 }
 
 /**
@@ -88,27 +92,31 @@ async function ProductBody({ params }: { params: Promise<{ locale: string; slug:
   const status = deriveStockStatus(product.stockQty, product.allowBackorder);
   const productUrl = absoluteUrl(locale, `/product/${product.slug}`);
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name,
-    sku: product.sku,
-    ...(description ? { description } : {}),
-    ...(product.images.length ? { image: product.images.map((id) => buildCloudinaryUrl(id, "gallery")) } : {}),
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "MRU",
-      price: product.effectivePrice,
-      availability: `https://schema.org/${
-        status === "in-stock" ? "InStock" : status === "backorder" ? "BackOrder" : "OutOfStock"
-      }`,
-      url: productUrl,
-    },
-  };
-
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <JsonLd
+        data={productJsonLd({
+          name,
+          url: productUrl,
+          price: product.effectivePrice,
+          availability: status,
+          sku: product.sku,
+          description: description || undefined,
+          images: product.images.map((id) => buildCloudinaryUrl(id, "gallery")),
+          category: categoryName,
+          // Only a live promotion gives a truthful end date. These pages are
+          // prerendered, so a computed "a year from today" would freeze the
+          // build clock into every product's offer.
+          priceValidUntil: product.promo ? new Date(product.promo.endsAt).toISOString() : undefined,
+        })}
+      />
+      {/* Mirrors the visible breadcrumb immediately below, which has had no machine-readable counterpart since it shipped. */}
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: categoryName, url: absoluteUrl(locale, `/catalog/${product.categorySlug}`) },
+          { name },
+        ])}
+      />
 
       <nav aria-label={t("breadcrumbLabel")} className="mb-4 flex items-center gap-2 text-xs text-ink-soft uppercase sm:mb-8">
         <Link href={`/catalog/${product.categorySlug}`} className="tracking-[0.04em] transition-colors hover:text-ink">

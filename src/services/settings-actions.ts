@@ -14,6 +14,17 @@ export async function updateShopSettingsAction(
     addressAr: formData.get("addressAr") ?? "",
     addressFr: formData.get("addressFr") ?? "",
     mapsUrl: formData.get("mapsUrl") ?? "",
+    streetAr: formData.get("streetAr") ?? "",
+    streetFr: formData.get("streetFr") ?? "",
+    city: formData.get("city") ?? "",
+    postalCode: formData.get("postalCode") ?? "",
+    latitude: formData.get("latitude") ?? "",
+    longitude: formData.get("longitude") ?? "",
+    opensAt: formData.get("opensAt") ?? "",
+    closesAt: formData.get("closesAt") ?? "",
+    closedDay: formData.get("closedDay") ?? "",
+    instagramUrl: formData.get("instagramUrl") ?? "",
+    facebookUrl: formData.get("facebookUrl") ?? "",
   });
   if (!result.ok) return result;
 

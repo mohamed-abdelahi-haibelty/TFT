@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CatalogShellSkeleton, CatalogView } from "@/app/[locale]/(store)/catalog/_view";
 import { localized } from "@/src/lib/locale-text";
-import { absoluteUrl, localeAlternates } from "@/src/lib/site";
+import { buildPageMetadata } from "@/src/lib/seo";
 import { getStorefrontCategories, getStorefrontCategoriesCore } from "@/src/services/storefront";
 
 export async function generateMetadata({
@@ -17,13 +17,16 @@ export async function generateMetadata({
     getStorefrontCategories(),
   ]);
   const category = categories.find((candidate) => candidate.slug === categorySlug);
-  const path = `/catalog/${categorySlug}`;
 
-  return {
-    title: category ? t("categoryTitle", { category: localized(locale, category.nameAr, category.nameFr) }) : t("title"),
+  return buildPageMetadata({
+    locale,
+    path: `/catalog/${categorySlug}`,
+    // The category name alone: the layout's `%s · TFT` template supplies the
+    // brand. The `catalog.seo.categoryTitle` message this used to interpolate
+    // appended "— TFT" itself, which the template then appended to again.
+    title: category ? localized(locale, category.nameAr, category.nameFr) : t("title"),
     description: t("description"),
-    alternates: { canonical: absoluteUrl(locale, path), languages: localeAlternates(path) },
-  };
+  });
 }
 
 /**

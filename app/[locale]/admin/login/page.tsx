@@ -5,6 +5,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { LoginForm } from "@/components/admin/login-form";
 import { ADMIN_MESSAGE_NAMESPACES, pickMessages } from "@/src/i18n/messages";
+import { NOINDEX } from "@/src/lib/seo";
 import { requireUser } from "@/src/services/authz";
 
 export async function generateMetadata({
@@ -14,7 +15,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "admin.login" });
-  return { title: t("title") };
+  // Outside the `(protected)` group, so it does not inherit that layout's noindex.
+  return { title: t("title"), ...NOINDEX };
 }
 
 /**

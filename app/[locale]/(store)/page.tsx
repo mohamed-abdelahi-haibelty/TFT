@@ -6,10 +6,12 @@ import { CategoryChip } from "@/components/store/category-chip";
 import { ProductCard } from "@/components/store/product-card";
 import { ProductImage } from "@/components/store/product-image";
 import { ProductGridSkeleton } from "@/components/store/skeletons";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Link } from "@/src/i18n/navigation";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
-import { absoluteUrl, localeAlternates } from "@/src/lib/site";
+import { buildPageMetadata } from "@/src/lib/seo";
+import { BUSINESS_LEGAL_NAME, storeJsonLd, webSiteJsonLd } from "@/src/lib/structured-data";
 import { getShopSettings } from "@/src/services/settings";
 import { getFeaturedProducts, getHomeBundles, getStorefrontCategories } from "@/src/services/storefront";
 
@@ -21,19 +23,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "home.seo" });
 
-  return {
-    title: t("title"),
-    description: t("description"),
-    alternates: { canonical: absoluteUrl(locale), languages: localeAlternates() },
-    openGraph: {
-      title: t("title"),
-      description: t("description"),
-      url: absoluteUrl(locale),
-      siteName: "TFT",
-      locale,
-      type: "website",
-    },
-  };
+  return buildPageMetadata({ locale, title: t("title"), description: t("description") });
 }
 
 export default async function HomePage({
@@ -49,7 +39,7 @@ export default async function HomePage({
   return (
     <>
       <Suspense fallback={null}>
-        <StoreJsonLd locale={locale} />
+        <ShopJsonLd locale={locale} />
       </Suspense>
 
       {/* Hero — "Atelier Blanc": an editorial split, white ground, serif headline. No eyebrow above the H1 (craft-floor bans a kicker outright, brief or not). */}
@@ -169,27 +159,37 @@ export default async function HomePage({
  * sees on the first frame, and the data fills in underneath them.
  */
 
-/** Structured data for the shop itself; renders no visible output. */
-async function StoreJsonLd({ locale }: { locale: string }) {
-  const [t, settings] = await Promise.all([
+/**
+ * Structured data for the shop and the site; renders no visible output.
+ *
+ * Two blocks, both anchored on stable `@id`s: the `Store` is what a local
+ * search result and a map panel are built from, and the `WebSite` is what
+ * offers Google the sitelinks search box pointing at `/catalog?q=`. Product
+ * offers elsewhere reference the `Store` by id rather than repeating it.
+ */
+async function ShopJsonLd({ locale }: { locale: string }) {
+  const [t, tCommon, settings] = await Promise.all([
     getTranslations({ locale, namespace: "home" }),
+    getTranslations({ locale, namespace: "common" }),
     getShopSettings(),
   ]);
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Store",
-    name: "THE FIRST TRADE",
-    alternateName: "TFT",
-    url: absoluteUrl(locale),
-    description: t("seo.description"),
-    ...(settings.whatsappNumber ? { telephone: `+${settings.whatsappNumber}` } : {}),
-    ...(settings.addressAr || settings.addressFr
-      ? { address: localized(locale, settings.addressAr ?? "", settings.addressFr ?? "") }
-      : {}),
-  };
+  const description = t("seo.description");
 
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />;
+  return (
+    <>
+      <JsonLd
+        data={storeJsonLd({
+          locale,
+          name: BUSINESS_LEGAL_NAME,
+          alternateName: tCommon("appName"),
+          description,
+          settings,
+        })}
+      />
+      <JsonLd data={webSiteJsonLd({ locale, name: tCommon("appName"), description })} />
+    </>
+  );
 }
 
 /** The newest product's photo, doubling as the hero art. */

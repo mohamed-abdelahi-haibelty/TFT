@@ -41,9 +41,8 @@
   },
   "catalog": {
     "seo": {
-      "title": "Tous les produits — TFT",
-      "description": "Parcourez tous les produits TFT : fournitures scolaires, cahiers et accessoires de papeterie à Nouadhibou.",
-      "categoryTitle": "{category} — TFT"
+      "title": "Tous les produits",
+      "description": "Parcourez tous les produits TFT : fournitures scolaires, cahiers et accessoires de papeterie à Nouadhibou."
     },
     "heading": {
       "all": "Tous les produits"
@@ -87,7 +86,7 @@
   },
   "boxes": {
     "seo": {
-      "title": "Toutes les boîtes — TFT",
+      "title": "Toutes les boîtes",
       "description": "Toutes les boîtes prêtes TFT : des ensembles complets de fournitures scolaires à prix fixe, à Nouadhibou."
     },
     "heading": "Toutes les boîtes",
@@ -131,7 +130,7 @@
   },
   "checkout": {
     "seo": {
-      "title": "Commander — TFT",
+      "title": "Commander",
       "description": "Finalisez votre commande et récupérez-la au magasin à Nouadhibou ou par bus."
     },
     "heading": "Commander",
@@ -187,7 +186,7 @@
   },
   "home": {
     "seo": {
-      "title": "TFT — Papeterie et boîtes scolaires à Nouadhibou",
+      "title": "Papeterie et boîtes scolaires à Nouadhibou",
       "description": "Fournitures scolaires, cahiers et boîtes prêtes de TFT à Nouadhibou. Commandez via WhatsApp, sans compte ni paiement en ligne."
     },
     "hero": {
@@ -224,7 +223,7 @@
   },
   "track": {
     "seo": {
-      "title": "Suivre ma commande — TFT",
+      "title": "Suivre ma commande",
       "description": "Vérifiez l'état de votre commande TFT avec le numéro de commande et le numéro de téléphone."
     },
     "heading": "Suivre ma commande",
@@ -886,12 +885,41 @@
       "addressFrLabel": "Adresse (français)",
       "mapsLabel": "Lien vers la carte (facultatif)",
       "mapsHint": "Lien Google Maps du magasin, si vous en avez un.",
+      "seoSectionTitle": "Informations pour les moteurs de recherche",
+      "seoSectionHint": "Ces champs ne sont pas affichés aux clients, mais c’est sur eux que Google s’appuie pour montrer le magasin dans les résultats locaux et sur la carte. Remplissez ce que vous savez, laissez le reste vide.",
+      "streetArLabel": "Rue (arabe)",
+      "streetFrLabel": "Rue (français)",
+      "cityLabel": "Ville",
+      "postalCodeLabel": "Code postal (facultatif)",
+      "latitudeLabel": "Latitude",
+      "longitudeLabel": "Longitude",
+      "coordinatesHint": "Ouvrez Google Maps, appuyez longuement sur le magasin et copiez les deux nombres affichés.",
+      "opensAtLabel": "Heure d’ouverture",
+      "closesAtLabel": "Heure de fermeture",
+      "hoursHint": "Format 24 h, par exemple 09:00 et 20:00.",
+      "closedDayLabel": "Jour de fermeture",
+      "closedDayNone": "Ouvert tous les jours",
+      "days": {
+        "Monday": "Lundi",
+        "Tuesday": "Mardi",
+        "Wednesday": "Mercredi",
+        "Thursday": "Jeudi",
+        "Friday": "Vendredi",
+        "Saturday": "Samedi",
+        "Sunday": "Dimanche"
+      },
+      "instagramLabel": "Lien Instagram (facultatif)",
+      "facebookLabel": "Lien Facebook (facultatif)",
+      "socialHint": "Liens vers les pages officielles du magasin. Ils aident Google à relier le site au magasin.",
       "save": "Enregistrer",
       "saving": "Enregistrement…",
       "saveSuccess": "Paramètres enregistrés.",
       "errors": {
         "invalidWhatsapp": "Numéro WhatsApp invalide. Saisissez uniquement des chiffres avec l’indicatif.",
-        "invalidUrl": "Lien invalide. Il doit commencer par http ou https."
+        "invalidUrl": "Lien invalide. Il doit commencer par http ou https.",
+        "invalidTime": "Heure invalide. Utilisez le format 24 h, par exemple 09:00.",
+        "invalidCoordinate": "Coordonnée invalide. Saisissez un nombre décimal, par exemple 20.9412.",
+        "invalidDay": "Jour invalide."
       }
     },
     "noAccess": {

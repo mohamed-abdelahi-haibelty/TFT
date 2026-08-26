@@ -5,10 +5,13 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BundleAvailabilityBadge } from "@/components/store/bundle-availability-badge";
 import { ProductImage } from "@/components/store/product-image";
 import { BundleListSkeleton } from "@/components/store/skeletons";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Link } from "@/src/i18n/navigation";
 import { localized } from "@/src/lib/locale-text";
 import { formatMoney } from "@/src/lib/money";
-import { absoluteUrl, localeAlternates } from "@/src/lib/site";
+import { buildPageMetadata } from "@/src/lib/seo";
+import { itemListJsonLd } from "@/src/lib/structured-data";
+import { absoluteUrl } from "@/src/lib/site";
 import { listCatalogBundles } from "@/src/services/storefront";
 
 export async function generateMetadata({
@@ -19,11 +22,12 @@ export async function generateMetadata({
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "boxes.seo" });
 
-  return {
+  return buildPageMetadata({
+    locale,
+    path: "/boxes",
     title: t("title"),
     description: t("description"),
-    alternates: { canonical: absoluteUrl(locale, "/boxes"), languages: localeAlternates("/boxes") },
-  };
+  });
 }
 
 /**
@@ -86,47 +90,60 @@ async function BoxLedger({ locale }: { locale: string }) {
   if (bundleList.length === 0) return <p className="pt-8 text-sm text-ink-soft">{t("empty")}</p>;
 
   return (
-    <ul>
-      {bundleList.map((bundle) => {
-        const name = localized(locale, bundle.nameAr, bundle.nameFr);
-        return (
-          <li key={bundle.id} className="border-b border-border">
-            <Link href={`/boxes/${bundle.slug}`} className="group flex items-center gap-5 py-5">
-              <div className="flex size-20 shrink-0 items-center justify-center border border-border p-3 transition-colors group-hover:border-ink sm:size-24">
-                {bundle.image ? (
-                  <ProductImage publicId={bundle.image} sizes="(min-width: 640px) 72px, 56px" />
-                ) : (
-                  <Gift className="size-7 text-ink-soft" aria-hidden="true" />
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <span className="block text-base font-medium text-ink sm:text-lg">{name}</span>
-                <span className="mt-1 block font-mono text-xs text-ink-soft">
-                  {tStore("itemCount", { count: bundle.itemCount })}
-                </span>
-                <div className="mt-1.5">
-                  <BundleAvailabilityBadge maxSellable={bundle.maxSellable} label={tBadges("outOfStock")} />
+    <>
+      {/* Names the set of URLs this page is *about*. A wall of anchors alone
+          leaves a crawler to infer it. */}
+      <JsonLd
+        data={itemListJsonLd({
+          url: absoluteUrl(locale, "/boxes"),
+          items: bundleList.map((bundle) => ({
+            name: localized(locale, bundle.nameAr, bundle.nameFr),
+            url: absoluteUrl(locale, `/boxes/${bundle.slug}`),
+          })),
+        })}
+      />
+      <ul>
+        {bundleList.map((bundle) => {
+          const name = localized(locale, bundle.nameAr, bundle.nameFr);
+          return (
+            <li key={bundle.id} className="border-b border-border">
+              <Link href={`/boxes/${bundle.slug}`} className="group flex items-center gap-5 py-5">
+                <div className="flex size-20 shrink-0 items-center justify-center border border-border p-3 transition-colors group-hover:border-ink sm:size-24">
+                  {bundle.image ? (
+                    <ProductImage publicId={bundle.image} sizes="(min-width: 640px) 72px, 56px" />
+                  ) : (
+                    <Gift className="size-7 text-ink-soft" aria-hidden="true" />
+                  )}
                 </div>
-              </div>
 
-              {/* A fixed end column with tabular figures, so prices form a real
-                  column across rows instead of each floating wherever its own
-                  digit count lands. */}
-              <span className="shrink-0 text-end font-mono text-base tabular-nums text-ink sm:min-w-32 sm:text-lg">
-                {formatMoney(bundle.effectivePrice)}
-              </span>
+                <div className="min-w-0 flex-1">
+                  <span className="block text-base font-medium text-ink sm:text-lg">{name}</span>
+                  <span className="mt-1 block font-mono text-xs text-ink-soft">
+                    {tStore("itemCount", { count: bundle.itemCount })}
+                  </span>
+                  <div className="mt-1.5">
+                    <BundleAvailabilityBadge maxSellable={bundle.maxSellable} label={tBadges("outOfStock")} />
+                  </div>
+                </div>
 
-              {/* The row is the primary action on this page and had no
-                  affordance at all: a photo, a name, a price, a hairline. */}
-              <ChevronRight
-                className="size-5 shrink-0 text-ink-soft transition-colors group-hover:text-ink rtl:rotate-180"
-                aria-hidden="true"
-              />
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+                {/* A fixed end column with tabular figures, so prices form a real
+                    column across rows instead of each floating wherever its own
+                    digit count lands. */}
+                <span className="shrink-0 text-end font-mono text-base tabular-nums text-ink sm:min-w-32 sm:text-lg">
+                  {formatMoney(bundle.effectivePrice)}
+                </span>
+
+                {/* The row is the primary action on this page and had no
+                    affordance at all: a photo, a name, a price, a hairline. */}
+                <ChevronRight
+                  className="size-5 shrink-0 text-ink-soft transition-colors group-hover:text-ink rtl:rotate-180"
+                  aria-hidden="true"
+                />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }

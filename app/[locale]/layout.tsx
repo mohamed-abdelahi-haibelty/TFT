@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Fraunces, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import localFont from "next/font/local";
@@ -8,7 +8,8 @@ import { notFound } from "next/navigation";
 import { pickMessages, ROOT_MESSAGE_NAMESPACES } from "@/src/i18n/messages";
 import { routing } from "@/src/i18n/routing";
 import { PostHogProvider } from "@/components/analytics/posthog-provider";
-import { absoluteUrl, localeAlternates, siteOrigin } from "@/src/lib/site";
+import { buildPageMetadata } from "@/src/lib/seo";
+import { siteOrigin } from "@/src/lib/site";
 import "../globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -71,6 +72,16 @@ export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
 
+/**
+ * Root metadata every route inherits and then overrides field by field. It is
+ * `buildPageMetadata` plus the two things only a root can set: `metadataBase`
+ * (which makes relative image URLs resolvable everywhere below) and the title
+ * template.
+ *
+ * `openGraph.images` is deliberately left unset here so Next fills it from
+ * `opengraph-image.tsx` in this same segment — which then cascades to every
+ * page that does not supply its own image, the listing routes included.
+ */
 export async function generateMetadata({
   params,
 }: {
@@ -80,14 +91,24 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: "common" });
   const tHome = await getTranslations({ locale, namespace: "home.seo" });
 
+  const base = await buildPageMetadata({
+    locale,
+    title: t("appName"),
+    description: tHome("description"),
+  });
+
   return {
+    ...base,
     metadataBase: new URL(siteOrigin()),
     title: { default: t("appName"), template: `%s · ${t("appName")}` },
-    description: tHome("description"),
-    alternates: { canonical: absoluteUrl(locale), languages: localeAlternates() },
-    openGraph: { siteName: t("appName"), locale, type: "website" },
   };
 }
+
+/** There was no `viewport` export anywhere in the app before this, so the browser chrome never matched the page and no `theme-color` was advertised at all. */
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
+  colorScheme: "light",
+};
 
 export default async function LocaleLayout({
   children,
