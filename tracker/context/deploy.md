@@ -5,8 +5,25 @@ behind the parts that are not obvious. Task 17's scope.
 
 ## Vercel project
 
-Already linked (`.vercel/project.json`): project `papeterie`, GitHub remote
-`mohamed-abdelahi-haibelty/TFT`. A push to `master` deploys to production.
+Already linked (`.vercel/project.json`): project `papeterie`. The code lives at
+`mohamed-abdelahi-haibelty/TFT`.
+
+> **A push to `master` does not deploy.** This file previously said it did; it
+> is not true and was caught by pushing and watching nothing happen. The Vercel
+> project has **no Git repository connected** (`vercel project inspect papeterie`
+> shows no Git section), so every deployment to date has been a CLI upload from
+> a working tree. Production is released with:
+>
+> ```
+> npx vercel --prod
+> ```
+>
+> Two consequences worth holding on to. **What deploys is the working tree, not
+> the commit** — so commit and push first, then deploy, or the live site and
+> `master` silently disagree. And **CI cannot gate a release**, because there is
+> no build triggered by the repository at all; `tsc`, `eslint`, `npm test` and
+> `next build` passing locally is the only gate that exists. Connecting the
+> repo in Vercel → Settings → Git would fix both and is worth doing.
 
 ### Region — do not change this casually
 
