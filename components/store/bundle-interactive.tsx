@@ -10,6 +10,7 @@ import { PromoCountdown } from "@/components/store/promo-countdown";
 import { useCartDrawer } from "@/components/store/cart-drawer-context";
 import { addToCart } from "@/src/lib/cart";
 import { formatMoney } from "@/src/lib/money";
+import { useTrackView } from "@/hooks/use-track-view";
 
 export type BundleInteractiveProps = {
   bundleId: string;
@@ -62,6 +63,8 @@ export function BundleInteractive({
   componentPriceSum,
 }: BundleInteractiveProps) {
   const t = useTranslations("box");
+
+  useTrackView("bundle_viewed", slug);
   const tBadges = useTranslations("store.badges");
   const tCommon = useTranslations("common");
   const { open } = useCartDrawer();

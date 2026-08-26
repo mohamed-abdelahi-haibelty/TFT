@@ -32,3 +32,17 @@ function scrubRecord(record: Record<string, unknown>): Record<string, unknown> {
 export function scrubSentryEvent<T extends Record<string, unknown>>(event: T): T {
   return scrubRecord(event) as T;
 }
+
+/**
+ * The same rule applied to a PostHog capture payload's `properties`, wired as
+ * `before_send` on both posthog-js and posthog-node.
+ *
+ * `analytics-events.ts` already forbids PII by construction — every event's
+ * props are a typed literal, and none of them declare a phone or a name. This
+ * is the runtime backstop for the two things types cannot cover: autocapture,
+ * which reads element text and attributes off pages the customer typed into,
+ * and any future call site that passes a wider object than it meant to.
+ */
+export function scrubAnalyticsProperties<T extends Record<string, unknown>>(properties: T): T {
+  return scrubRecord(properties) as T;
+}

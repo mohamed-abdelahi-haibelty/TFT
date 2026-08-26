@@ -40,6 +40,39 @@ describe("logger Sentry routing", () => {
     expect(captureExceptionMock).toHaveBeenCalledTimes(1);
   });
 
+  it("sends the caught error itself, preserving its stack", async () => {
+    const { logger } = await import("@/src/lib/logger");
+
+    // The real failure, thrown somewhere far from logger.ts.
+    const original = new Error("Neon connection reset");
+
+    logger.error("Unhandled route handler error", { path: "/api/orders" }, original);
+
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    // Identity, not equality: fabricating `new Error(message)` here used to
+    // replace the real stack with logger.ts's own frame, which collapsed
+    // unrelated failures into one Sentry group.
+    expect(captureExceptionMock.mock.calls[0][0]).toBe(original);
+  });
+
+  it("falls back to a synthetic error when the caller has none", async () => {
+    const { logger } = await import("@/src/lib/logger");
+
+    logger.error("Invariant violated: order total is negative");
+
+    const captured = captureExceptionMock.mock.calls[0][0] as Error;
+    expect(captured).toBeInstanceOf(Error);
+    expect(captured.message).toBe("Invariant violated: order total is negative");
+  });
+
+  it("still suppresses an expected taxonomy error even when given a real error", async () => {
+    const { logger } = await import("@/src/lib/logger");
+
+    logger.error("Stock decrement failed", { code: "CONFLICT" }, new Error("boom"));
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
   it("does not send Sentry events for non-error log levels", async () => {
     const { logger } = await import("@/src/lib/logger");
 

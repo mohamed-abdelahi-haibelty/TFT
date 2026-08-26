@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { scrubSentryEvent } from "@/src/lib/observability/scrub-sentry-event";
+import {
+  scrubAnalyticsProperties,
+  scrubSentryEvent,
+} from "@/src/lib/observability/scrub-sentry-event";
 
 describe("scrubSentryEvent", () => {
   it("strips an 8-digit Mauritanian phone number from a message string", () => {
@@ -41,5 +44,38 @@ describe("scrubSentryEvent", () => {
     });
 
     expect(scrubbed.extra).toEqual({ order_total: 4500, items_count: 3 });
+  });
+});
+
+describe("scrubAnalyticsProperties", () => {
+  it("strips a phone key from a PostHog property bag", () => {
+    const scrubbed = scrubAnalyticsProperties({
+      code: "TFT-2601-0007",
+      customer_phone: "27139094",
+      total: 4500,
+    });
+
+    expect(scrubbed.customer_phone).toBe("[redacted]");
+    // The order code is explicitly allowed and must survive untouched.
+    expect(scrubbed.code).toBe("TFT-2601-0007");
+    expect(scrubbed.total).toBe(4500);
+  });
+
+  it("redacts a bare 8-digit number wherever autocapture picked it up", () => {
+    const scrubbed = scrubAnalyticsProperties({
+      $el_text: "Commander pour 27139094",
+      $current_url: "https://tft.example/fr/checkout",
+    });
+
+    expect(scrubbed.$el_text).toBe("Commander pour [redacted]");
+    expect(scrubbed.$current_url).toBe("https://tft.example/fr/checkout");
+  });
+
+  it("reaches nested autocapture element chains", () => {
+    const scrubbed = scrubAnalyticsProperties({
+      $elements: [{ attr__value: "27139094" }, { attr__value: "safe" }],
+    });
+
+    expect(scrubbed.$elements).toEqual([{ attr__value: "[redacted]" }, { attr__value: "safe" }]);
   });
 });

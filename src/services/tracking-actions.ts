@@ -2,6 +2,8 @@
 
 import { headers } from "next/headers";
 import { getLocale, getTranslations } from "next-intl/server";
+import { track } from "@/src/lib/analytics";
+import { getAnalyticsDistinctId } from "@/src/lib/analytics-identity";
 import type { ServiceResult } from "@/src/lib/errors";
 import { checkRateLimit } from "@/src/lib/rate-limit";
 import { trackOrder, type TrackOrderResult } from "@/src/services/tracking";
@@ -45,5 +47,13 @@ export async function trackOrderAction(_prev: TrackOrderState, formData: FormDat
     return { ok: false, error: { code: "RATE_LIMITED", message: t("rateLimited") } };
   }
 
-  return trackOrder({ code, phone }, locale);
+  const result = await trackOrder({ code, phone }, locale);
+
+  // Only whether a lookup landed, never what was looked up. The code/phone pair
+  // is stated to be this order's only credential, and the docblock above is the
+  // reason it is kept out of the URL — putting either into an analytics event
+  // would hand it to a third party by a different route.
+  track("order_tracked", { found: result.ok }, await getAnalyticsDistinctId());
+
+  return result;
 }

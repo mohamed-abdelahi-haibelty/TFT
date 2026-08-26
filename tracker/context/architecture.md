@@ -15,6 +15,7 @@
 | Validation | Zod | All external input at boundaries (forms, route handlers, server actions) |
 | Caching | Next.js ISR + `revalidateTag`; Cloudflare CDN in front | No Redis in v1 |
 | Hosting | Vercel free tier; Cloudflare for DNS/CDN/rate limiting | |
+| Observability | Sentry (`@sentry/nextjs`) + PostHog (`posthog-js` / `posthog-node`) | Production deploys only. Errors report directly to Sentry (no `tunnelRoute`); events go directly to PostHog (no reverse proxy) — both would otherwise bill Vercel invocations for telemetry. Browser SDK is errors-only, no tracing, no session replay |
 
 ## System Boundaries
 
@@ -23,6 +24,7 @@
 - `app/api/` — route handlers (order creation, tracking lookup, barcode image, Cloudinary signature). Thin: validate → call service → respond.
 - `src/db/` — Drizzle schema, migrations, seed. Only place that defines tables.
 - `src/services/` — business logic (orders, stock, sales, bundles). The ONLY layer that mutates the database. UI and route handlers never write queries with side effects directly.
+- `src/lib/analytics*.ts` — telemetry, split by trust and by cost. `analytics-client.ts` (browser) carries views and interactions; `analytics.ts` (`posthog-node`) carries money events only, and never runs anywhere a route is cached. Firing a view event server-side would either report once per revalidation or force the route dynamic and wake Neon for every visitor — `tests/lib/observability/analytics-boundaries.test.ts` enforces the separation.
 - `src/lib/` — pure helpers (whatsapp message builder, order-code generator, cloudinary URLs, money formatting).
 - `components/` — shared UI. `components/ui/*` is generated shadcn — protected, do not edit.
 - `proxy.ts` — locale routing + admin route session gate.

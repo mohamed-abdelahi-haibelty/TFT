@@ -43,3 +43,31 @@ Service functions return `{ ok: false, error: { code, message } }` with codes:
 
 - Tiny `src/lib/logger.ts` (level + JSON to console; Vercel captures it). Log every `INTERNAL` with request context. No third-party logging service in v1.
 - Never log customer phone numbers at info level; only within order records in DB.
+
+### Which errors reach Sentry
+
+The routing lives in `logger.ts` alone, keyed off `context.code`, so there is
+one place to audit rather than a decision re-made at every call site. Taxonomy
+codes (`VALIDATION`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`,
+`RATE_LIMITED`) are expected outcomes and are **not** sent. Anything else is.
+
+**Pass the caught error as the third argument** — `logger.error(message,
+context, error)`. It is what Sentry captures, and therefore what carries the
+stack from where the failure actually happened. Omitting it falls back to a
+synthetic `Error` created inside `logger.ts`, which puts every event on that
+one line and collapses unrelated failures into a single Sentry group.
+
+### Error boundaries report only what nothing else did
+
+`error.tsx` / `global-error.tsx` go through `useReportBoundaryError`, which
+reports only when `error.digest` is **absent**.
+
+A digest means React caught the error while rendering on the server, where
+`onRequestError` already captured it with its real server stack. The copy that
+reaches the browser has no server frames, so re-reporting it spends a second
+event from a 5k/month budget on a strictly worse duplicate. No digest means a
+client-only failure — hydration, an effect, an event handler — that the
+boundary is the only possible reporter for.
+
+The decision is a pure function, `shouldReportBoundaryError`, so it is tested
+without a renderer.

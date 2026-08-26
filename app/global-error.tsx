@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import { logger } from "@/src/lib/logger";
+import { useReportBoundaryError } from "@/hooks/use-report-boundary-error";
 import "./globals.css";
 
 export default function GlobalError({
@@ -11,9 +10,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    logger.error("Unhandled root layout error", { message: error.message, digest: error.digest });
-  }, [error]);
+  useReportBoundaryError(error);
 
   return (
     <html lang="ar" dir="rtl">

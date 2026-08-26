@@ -2,6 +2,8 @@ import { and, asc, count, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL }
 import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { db, withTransaction, type Tx } from "@/src/db/client";
+import { track } from "@/src/lib/analytics";
+import { getAnalyticsDistinctId } from "@/src/lib/analytics-identity";
 import {
   bundleItems,
   bundles,
@@ -393,6 +395,24 @@ export async function createOrderCore(
     }
     throw error;
   }
+
+  // Reported here rather than from the route handler, and only on this branch,
+  // because both idempotent-retry paths above (`existingOrderResult`) also
+  // return `ok: true` for an order that already exists. A checkout that retries
+  // — which is the whole reason the idempotency key exists — would otherwise
+  // report a second `order_submitted` and double-count its revenue. Same rule
+  // and same placement as `pos_sale_completed` in pos.ts: after the write has
+  // actually committed, never before.
+  track(
+    "order_submitted",
+    {
+      code: created.code,
+      total,
+      city: data.city,
+      items_count: resolved.reduce((sum, line) => sum + line.qty, 0),
+    },
+    await getAnalyticsDistinctId(),
+  );
 
   return {
     ok: true,

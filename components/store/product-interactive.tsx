@@ -12,6 +12,7 @@ import { addToCart } from "@/src/lib/cart";
 import { formatMoney } from "@/src/lib/money";
 import { buildWhatsAppUrl } from "@/src/lib/whatsapp";
 import { deriveStockStatus } from "@/src/lib/stock-status";
+import { useTrackView } from "@/hooks/use-track-view";
 
 export type InteractiveVariant = {
   id: string;
@@ -81,6 +82,8 @@ export function ProductInteractive({
   whatsappNumber,
 }: ProductInteractiveProps) {
   const t = useTranslations("product");
+
+  useTrackView("product_viewed", slug);
   const tBadges = useTranslations("store.badges");
   const tCommon = useTranslations("common");
   const { open } = useCartDrawer();

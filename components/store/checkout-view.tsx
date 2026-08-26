@@ -17,6 +17,7 @@ import {
 import { clearLastOrder, readLastOrder, writeLastOrder } from "@/src/lib/last-order";
 import { formatMoney } from "@/src/lib/money";
 import { isValidMauritanianPhone } from "@/src/lib/phone";
+import { trackEvent } from "@/src/lib/analytics-client";
 import { buildWhatsAppOrderMessage, buildWhatsAppUrl } from "@/src/lib/whatsapp";
 
 // Checkout only ever offers NDB (pickup) or NKC (bus) — "other" is a valid
@@ -364,10 +365,16 @@ export function CheckoutView({ locale, whatsappNumber }: { locale: string; whats
 
             {whatsappUrl ? (
               <>
+                {/* The handoff is where the order leaves the site for WhatsApp,
+                    so it is the last thing measurable from here — an order
+                    placed but never handed off is the drop-off worth seeing.
+                    Only the order code goes out, which the event catalog
+                    explicitly allows; the name, phone and note never do. */}
                 <a
                   href={whatsappUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => trackEvent("whatsapp_opened", { code: confirmed.code })}
                   className="mt-5 flex h-12 w-full items-center justify-center rounded-[2px] bg-ink text-xs font-semibold tracking-[0.05em] text-paper uppercase transition-colors hover:bg-[oklch(0.29_0.012_59.14)]"
                 >
                   {t("confirmation.whatsappCta")}

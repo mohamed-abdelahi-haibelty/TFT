@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { cache } from "react";
@@ -89,7 +90,24 @@ export function evaluateSession(
  * here is a single request, so the user row is still re-read on the very next
  * one and revoking a permission still takes effect immediately.
  */
-const getRequestSession = cache(async (): Promise<Session> => auth.api.getSession({ headers: await headers() }));
+const getRequestSession = cache(async (): Promise<Session> => {
+  const session = await auth.api.getSession({ headers: await headers() });
+
+  // Attaching the actor here rather than at each gate costs nothing: this
+  // function is already the one place the session is read, and it is already
+  // deduped, so no extra database round trip is involved — which matters,
+  // because on Neon's Free plan one stray query opens a five-minute compute
+  // window.
+  //
+  // Id and role only. Name and email are exactly the personal data
+  // `sendDefaultPii: false` and the event scrubber exist to keep out of Sentry,
+  // and neither adds anything to a stack trace that the id does not.
+  if (session?.user) {
+    Sentry.setUser({ id: session.user.id, role: session.user.role });
+  }
+
+  return session;
+});
 
 async function gateMessages(): Promise<GateMessages> {
   const t = await getTranslations("authErrors");

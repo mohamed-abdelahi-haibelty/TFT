@@ -7,6 +7,8 @@
  * wrapper other components call.
  */
 
+import { trackEvent } from "./analytics-client";
+
 export type CartItemKind = "product" | "bundle";
 
 export type CartItem = {
@@ -102,6 +104,13 @@ export function getCart(): CartItem[] {
 export function addToCart(item: NewCartItem): CartItem[] {
   const next = addCartItem(readCart(), item);
   writeCart(next);
+
+  // The one place both the product page and the bundle page pass through, so
+  // the event cannot drift out of sync with one of them. It belongs on this
+  // wrapper rather than on the pure `addCartItem` above, which stays free of
+  // side effects and is unit-tested directly.
+  trackEvent("added_to_cart", { type: item.kind, slug: item.slug, qty: item.qty });
+
   return next;
 }
 

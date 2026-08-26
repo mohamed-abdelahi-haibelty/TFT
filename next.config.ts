@@ -9,7 +9,32 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 // because next.config.ts is loaded before path aliases resolve.
 const STOREFRONT_REVALIDATE_SECONDS = 900;
 
+// Sentry and PostHog are live on production deploys only. Preview deploys and
+// local dev stay inert, which is what keeps the Vitest suite (it runs against a
+// real database) and every preview push out of a 5,000-errors-a-month budget.
+const OBSERVABILITY_ENV = process.env.VERCEL_ENV ?? "development";
+
+// The release Sentry associates uploaded source maps with, and the one the SDK
+// stamps on events at runtime. It has to be the same string in both places or
+// the maps never apply, which is why it is minted here and handed to both.
+//
+// Sentry would normally infer this from VERCEL_GIT_COMMIT_SHA. That is empty on
+// this project: the Vercel project has no Git repository connected and every
+// deploy is a CLI upload from a working tree (see tracker/context/deploy.md).
+// VERCEL_DEPLOYMENT_ID is the identifier that does exist for those.
+const SENTRY_RELEASE =
+  process.env.VERCEL_DEPLOYMENT_ID ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "dev";
+
 const nextConfig: NextConfig = {
+  // Inlined at build time so both runtimes read identical values. Client code
+  // cannot read VERCEL_ENV or VERCEL_DEPLOYMENT_ID directly — Next inlines
+  // nothing but NEXT_PUBLIC_* into the browser bundle, so reading them there
+  // yields undefined and silently disables the browser SDK in production.
+  env: {
+    NEXT_PUBLIC_OBSERVABILITY_ENV: OBSERVABILITY_ENV,
+    NEXT_PUBLIC_SENTRY_RELEASE: SENTRY_RELEASE,
+  },
+
   // Data is dynamic by default; `use cache` opts each read in explicitly, and
   // every route ships a prerendered static shell that streams the rest.
   cacheComponents: true,
@@ -48,7 +73,20 @@ const nextConfig: NextConfig = {
 
 export default withSentryConfig(withNextIntl(nextConfig), {
   silent: true,
+  // Upload fails silently without these — set them in the Vercel project
+  // alongside SENTRY_AUTH_TOKEN. See tracker/context/deploy.md.
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  release: { name: SENTRY_RELEASE },
   // Source maps are only uploaded from Vercel's build environment.
-  sourcemaps: { disable: !process.env.VERCEL },
+  sourcemaps: {
+    disable: !process.env.VERCEL,
+    // Sentry keeps its copy; leaving them on the CDN publishes readable source
+    // for the whole app and costs bandwidth against the Hobby plan to serve.
+    deleteSourcemapsAfterUpload: true,
+  },
+  // Next emits some client chunks outside the directory Sentry scans by
+  // default; without this the frames in those chunks stay minified.
+  widenClientFileUpload: true,
   authToken: process.env.SENTRY_AUTH_TOKEN,
 });

@@ -19,10 +19,14 @@ export function withErrorHandling(handler: RouteHandler) {
         { status: HTTP_STATUS_BY_ERROR_CODE[result.error.code] },
       );
     } catch (error) {
-      logger.error("Unhandled route handler error", {
-        message: error instanceof Error ? error.message : String(error),
-        path: request.nextUrl.pathname,
-      });
+      logger.error(
+        "Unhandled route handler error",
+        {
+          message: error instanceof Error ? error.message : String(error),
+          path: request.nextUrl.pathname,
+        },
+        error,
+      );
 
       return NextResponse.json(
         { error: { code: "INTERNAL", message: "Something went wrong." } },

@@ -1,21 +1,29 @@
 /**
  * Typed catalog of PostHog custom events. Never add names, phone numbers, or
  * free-text notes to any event's props — order code is not PII and is allowed.
+ *
+ * Where each one fires is a deliberate split, not an accident of convenience.
+ * Views and interactions are captured client-side because the pages they
+ * happen on are cached: reporting them from a server component would either
+ * run once per revalidation, no matter how many people looked, or force the
+ * route dynamic and wake Neon for every visitor. Money events are captured
+ * server-side, after the write commits, because a client cannot be trusted to
+ * report a sale and must not be able to invent one.
  */
 export interface AnalyticsEventProps {
-  // TODO(task 09): fire from the product detail page.
+  /** `useTrackView` in components/store/product-interactive.tsx. */
   product_viewed: { slug: string };
-  // TODO(task 10): fire from the bundle detail page.
+  /** `useTrackView` in components/store/bundle-interactive.tsx. */
   bundle_viewed: { slug: string };
-  // TODO(task 11): fire from the cart's "add" action.
+  /** `addToCart` in src/lib/cart.ts — the one path both detail pages take. */
   added_to_cart: { type: "product" | "bundle"; slug: string; qty: number };
-  // TODO(task 11): fire server-side from POST /api/orders on success.
+  /** `createOrderCore` in src/services/orders.ts, on the genuine-create branch only. */
   order_submitted: { code: string; total: number; city: string; items_count: number };
-  // TODO(task 11): fire when the WhatsApp handoff link is opened.
+  /** The confirmation handoff link in components/store/checkout-view.tsx. */
   whatsapp_opened: { code: string };
-  // TODO(task 12): fire from the order tracking lookup result.
+  /** `trackOrderAction` in src/services/tracking-actions.ts. Whether, never what. */
   order_tracked: { found: boolean };
-  // TODO(task 14): fire server-side when a POS sale completes.
+  /** `completeSaleCore` in src/services/pos.ts, after the sale transaction commits. */
   pos_sale_completed: { total: number; items_count: number; payment_method: string };
 }
 

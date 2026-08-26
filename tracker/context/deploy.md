@@ -66,7 +66,53 @@ Required in production:
 
 Optional (everything degrades gracefully when unset):
 `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN` (build-time source-map upload,
-production only), `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`.
+production only), `SENTRY_ORG`, `SENTRY_PROJECT`, `NEXT_PUBLIC_POSTHOG_KEY`,
+`NEXT_PUBLIC_POSTHOG_HOST`.
+
+`SENTRY_ORG` and `SENTRY_PROJECT` are only optional in the sense that the build
+still succeeds without them — **source-map upload fails silently when they are
+missing**, and the symptom appears much later as minified frames in every
+production stack trace. Set all four together or none of them.
+
+### Observability is gated on `VERCEL_ENV=production`
+
+Sentry and PostHog initialize only on production deploys (`src/lib/observability/config.ts`,
+inlined from `next.config.ts`). Preview deploys and local dev are fully inert
+even with valid keys present. That is deliberate: the Vitest suite runs against
+a real database and previews get pushed freely, and both would otherwise spend
+the same free-tier budget that exists to report real customer-facing failures.
+
+Consequence worth knowing before debugging: **you cannot verify a DSN from a
+preview deploy.** Verification has to happen against production, or by
+temporarily setting `NEXT_PUBLIC_OBSERVABILITY_ENV=production` in a preview.
+
+### Release identity
+
+Sentry associates uploaded source maps with a release name, and the SDK stamps
+the same name on events at runtime. Both come from `SENTRY_RELEASE` in
+`next.config.ts`, which reads `VERCEL_DEPLOYMENT_ID`.
+
+It deliberately does **not** rely on `VERCEL_GIT_COMMIT_SHA`, which is what
+Sentry would infer by default: this project has no Git repository connected to
+Vercel (see the note under "Vercel project" above), so that variable is
+empty on every deploy and the maps would attach to no release at all.
+
+### Free-tier guards that live in the dashboards, not the repo
+
+Nothing in this codebase can stop a runaway error loop from spending a month of
+quota overnight. These are configured once, per provider:
+
+- **Sentry** — set a spend cap, and a per-key rate limit on the client key.
+  The free tier is ~5k errors/month; one misbehaving component in a render loop
+  can exceed that in an hour.
+- **PostHog** — turn on bot filtering (the storefront is crawled), and set a
+  volume alert well below the 1M events/month free tier.
+
+The two things the code already refuses to do for the same reason, and which
+should stay refused: no Sentry `tunnelRoute`, and no PostHog reverse-proxy
+rewrite. Both would route every event through a Vercel function, and for the
+storefront through `proxy.ts` as well — paying Vercel invocations to send
+telemetry that goes directly to the vendor today.
 
 Never set `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` in production beyond the
 first-deploy seed described below, and rotate the password immediately after.

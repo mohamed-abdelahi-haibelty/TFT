@@ -18,6 +18,24 @@ const envSchema = z.object({
   // number exists yet — optional so the storefront footer/hero can render a
   // graceful fallback instead of a broken link until one is set.
   NEXT_PUBLIC_WHATSAPP_NUMBER: z.string().trim().min(1).optional(),
+  // Observability. All optional: with these unset Sentry and PostHog are fully
+  // inert, which is the intended state in dev and on preview deploys. They are
+  // validated here anyway so a malformed DSN fails the boot rather than quietly
+  // disabling error reporting on a production deploy — the failure mode of a
+  // typo used to be silence.
+  //
+  // Note the asymmetry, which is deliberate and not an oversight: client-side
+  // code reads `process.env.NEXT_PUBLIC_*` literally rather than importing from
+  // here, because Next only inlines the literal form into the browser bundle
+  // and this module's `safeParse(process.env)` runs against an empty object
+  // there. This schema guards the server; the literals are what reach the
+  // client. See src/lib/observability/config.ts.
+  NEXT_PUBLIC_SENTRY_DSN: z.url().or(z.literal("")).optional(),
+  SENTRY_AUTH_TOKEN: z.string().optional(),
+  SENTRY_ORG: z.string().optional(),
+  SENTRY_PROJECT: z.string().optional(),
+  NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
+  NEXT_PUBLIC_POSTHOG_HOST: z.url().or(z.literal("")).optional(),
 });
 
 function loadEnv() {

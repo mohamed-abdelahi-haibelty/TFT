@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { logger } from "@/src/lib/logger";
+import { useReportBoundaryError } from "@/hooks/use-report-boundary-error";
 
 export default function Error({
   error,
@@ -13,9 +12,7 @@ export default function Error({
 }) {
   const t = useTranslations("errors");
 
-  useEffect(() => {
-    logger.error("Unhandled route error", { message: error.message, digest: error.digest });
-  }, [error]);
+  useReportBoundaryError(error);
 
   return (
     <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
