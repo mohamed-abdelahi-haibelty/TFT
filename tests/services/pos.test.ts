@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/src/db/client";
 import {
@@ -351,6 +351,73 @@ describe("pos service — resolvePosItemCore / completeSaleCore / voidOrderCore"
 
       const [productRow] = await db.select().from(products).where(eq(products.id, lowStockProductId)).limit(1);
       expect(productRow.stockQty).toBe(1);
+    });
+
+    it("leaves nothing behind when a later line fails after an earlier one already decremented", async () => {
+      // The case the compensating-rollback code existed for: line one lands,
+      // line two cannot be supplied, and everything already written has to
+      // come back out. Under a transaction that is `ROLLBACK` rather than a
+      // replayed ledger of undo writes — so the assertion is simply that no
+      // trace of the attempt survives.
+      const [before] = await db.select({ value: count() }).from(orders);
+      const [stockBefore] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+      const movementsBefore = await db.select({ value: count() }).from(stockMovements).where(eq(stockMovements.productId, productId));
+
+      const result = await completeSaleCore(
+        {
+          locale: "fr",
+          paymentMethod: "cash",
+          lines: [
+            { kind: "product", productId, qty: 1, overridden: false },
+            { kind: "product", productId: lowStockProductId, qty: 99, overridden: false },
+          ],
+          removedLines: [{ nameSnapshot: "Ligne retiree", unitPrice: 100, qty: 1, reason: "changed_mind" }],
+        },
+        actorId,
+        posMessages,
+      );
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe("CONFLICT");
+
+      const [after] = await db.select({ value: count() }).from(orders);
+      expect(after.value).toBe(before.value);
+
+      const [stockAfter] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+      expect(stockAfter.stockQty).toBe(stockBefore.stockQty);
+
+      const movementsAfter = await db.select({ value: count() }).from(stockMovements).where(eq(stockMovements.productId, productId));
+      expect(movementsAfter[0].value).toBe(movementsBefore[0].value);
+    });
+
+    it("reports the stock levels the sale left behind, so the register need not re-read the catalog", async () => {
+      const [before] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+
+      const result = await completeSaleCore(
+        {
+          locale: "fr",
+          paymentMethod: "cash",
+          lines: [{ kind: "product", productId, qty: 2, overridden: false }],
+          removedLines: [],
+        },
+        actorId,
+        posMessages,
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const [orderRow] = await db.select().from(orders).where(eq(orders.code, result.data.code)).limit(1);
+      createdOrderIds.push(orderRow.id);
+
+      expect(result.data.stockLevels).toContainEqual({
+        productId,
+        variantId: null,
+        stockQty: before.stockQty - 2,
+      });
+      // Every active bundle, not just one that was sold — selling a component
+      // moves the availability of every box containing it.
+      expect(result.data.bundleLevels.some((level) => level.bundleId === bundleId)).toBe(true);
     });
 
     it("an overridden line corrects the recorded stock to exactly cover the sale, then sells it", async () => {

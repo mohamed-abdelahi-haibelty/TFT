@@ -7,7 +7,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 // Mirrors `STOREFRONT_REVALIDATE_SECONDS` in src/services/storefront.ts, which
 // is the prose explanation of why this number is what it is. Kept literal here
 // because next.config.ts is loaded before path aliases resolve.
-const STOREFRONT_REVALIDATE_SECONDS = 60;
+const STOREFRONT_REVALIDATE_SECONDS = 900;
 
 const nextConfig: NextConfig = {
   // Data is dynamic by default; `use cache` opts each read in explicitly, and
@@ -26,7 +26,7 @@ const nextConfig: NextConfig = {
     storefront: {
       stale: STOREFRONT_REVALIDATE_SECONDS,
       revalidate: STOREFRONT_REVALIDATE_SECONDS,
-      expire: 300,
+      expire: 3600,
     },
   },
 

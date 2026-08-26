@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
+import { cache } from "react";
 import { auth } from "@/src/lib/auth";
 import type { ServiceResult } from "@/src/lib/errors";
 import {
@@ -72,6 +73,24 @@ export function evaluateSession(
   return { ok: true, data: user };
 }
 
+/**
+ * The session read, deduped for the lifetime of one request.
+ *
+ * Every gate below resolves the session independently, and a single admin
+ * render goes through several of them — the protected layout, the page, and
+ * then one per service call. The POS page alone did it five times, which on
+ * `neon-http` is five sequential session+user round trips before any real work
+ * starts. React's `cache()` collapses those into one, the same way
+ * `getStorefrontProductBySlug` dedupes `generateMetadata` against the page
+ * body.
+ *
+ * This is NOT the `session.cookieCache` that `src/lib/auth.ts` deliberately
+ * leaves off, and it does not weaken what that comment protects: the scope
+ * here is a single request, so the user row is still re-read on the very next
+ * one and revoking a permission still takes effect immediately.
+ */
+const getRequestSession = cache(async (): Promise<Session> => auth.api.getSession({ headers: await headers() }));
+
 async function gateMessages(): Promise<GateMessages> {
   const t = await getTranslations("authErrors");
   return { unauthorized: t("unauthorized"), forbidden: t("forbidden") };
@@ -83,7 +102,7 @@ async function gateMessages(): Promise<GateMessages> {
  * the login page, and the pages that only need the signed-in identity.
  */
 export async function requireUser(role?: "admin" | "staff"): Promise<ServiceResult<AuthUser>> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getRequestSession();
   return evaluateSession(session, { role }, await gateMessages());
 }
 
@@ -94,7 +113,7 @@ export async function requireUser(role?: "admin" | "staff"): Promise<ServiceResu
  * cannot do, but hiding is a courtesy and this is the rule.
  */
 export async function requirePermission(permission: Permission): Promise<ServiceResult<AuthUser>> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getRequestSession();
   return evaluateSession(session, { permission }, await gateMessages());
 }
 

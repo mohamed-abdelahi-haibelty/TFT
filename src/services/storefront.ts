@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import { db } from "@/src/db/client";
@@ -13,7 +13,11 @@ import {
   variantImages,
 } from "@/src/db/schema";
 import { deriveMaxSellable, type AvailabilityComponent } from "@/src/lib/bundle-availability";
-import { containsTerm } from "@/src/lib/search";
+import {
+  selectCatalogProducts,
+  type CatalogFilters,
+  type CatalogSort,
+} from "@/src/lib/catalog-filter";
 import { getEffectivePrices, type EffectivePrice, type PricingItem } from "@/src/services/pricing";
 
 /**
@@ -28,6 +32,14 @@ import { getEffectivePrices, type EffectivePrice, type PricingItem } from "@/src
  * same way `requirePermission`'s `next/headers()` call can't run under Vitest
  * — so like every other `src/services/*` module, the real query logic lives
  * in an exported `*Core` function tests call directly, uncached.
+ *
+ * The browse surface is served from two cached snapshots — `getCatalogSnapshot`
+ * and `listCatalogBundles` — rather than one cached query per filter
+ * combination. Category, search, price range and sort are applied in memory by
+ * `src/lib/catalog-filter.ts`; that module's own header explains why, and what
+ * catalog size would make it the wrong trade. Product and bundle *detail*
+ * pages keep their own cached reads, since they need descriptions, variants
+ * and the full image list the cards do not carry.
  *
  * Every promo-sensitive entry carries the `"storefront"` cache profile
  * (defined in next.config.ts). Tag invalidation alone covers *mutations*, but
@@ -46,13 +58,31 @@ import { getEffectivePrices, type EffectivePrice, type PricingItem } from "@/src
  */
 
 /**
- * Upper bound on how long a storefront price may lag the promotion calendar.
- * Short enough that nobody is quoted a dead discount for long, long enough
- * that the catalog is still served from cache under any realistic traffic.
+ * Upper bound on how long a storefront read may lag the database.
+ *
+ * This number is a Neon Free-plan budget, not a freshness preference. That
+ * plan bills wall-clock time the compute is *awake*, and scale-to-zero is
+ * fixed at five minutes of inactivity — so any single query costs a five
+ * minute minimum, and the whole monthly allowance is roughly 400 awake-hours.
+ * At the old 60s one visitor per minute was enough to hold the compute awake
+ * around the clock; at 900s the entire storefront costs one fill per quarter
+ * hour no matter how much traffic arrives.
+ *
+ * Nothing correctness-critical rides on it:
+ *   - Admin edits are not subject to it at all — every mutation calls
+ *     `revalidateTag(..., "max")` and lands immediately.
+ *   - A promotion *ending* is handled client-side (`promo-countdown.tsx` ticks
+ *     the clock and falls back to `postPromoPrice`), so a stale entry cannot
+ *     keep quoting a dead discount.
+ *   - A promotion *starting* is the one genuinely clock-driven lag left: a
+ *     scheduled promo becomes visible up to 15 minutes late.
+ *   - Stock shown here is advisory; `createOrderCore` re-checks availability
+ *     and re-prices against the real clock before anything is charged.
+ *
  * Kept as the single source of truth for the `"storefront"` cacheLife profile
  * in next.config.ts.
  */
-export const STOREFRONT_REVALIDATE_SECONDS = 60;
+export const STOREFRONT_REVALIDATE_SECONDS = 900;
 
 export type StorefrontCategory = {
   id: string;
@@ -191,87 +221,73 @@ async function hydrateProductCards(rows: ProductCardRow[]): Promise<StorefrontPr
   });
 }
 
-export async function getFeaturedProductsCore(limit = 8): Promise<StorefrontProductCard[]> {
+/**
+ * A sanity bound on the snapshot itself, not a control anyone browses with —
+ * it exists only so a future data glitch cannot pull an unbounded result set
+ * into memory. `CATALOG_MAX_RESULTS` below is the one that shapes what a
+ * visitor sees. If the shop ever approaches this, the in-memory filtering in
+ * `catalog-filter.ts` is the thing to reconsider, not this number.
+ */
+const CATALOG_SNAPSHOT_MAX_ROWS = 2000;
+
+/** How many results one catalog listing shows, applied after filtering and sorting. */
+const CATALOG_MAX_RESULTS = 200;
+
+/**
+ * Every active product, newest first, hydrated into cards — the single read
+ * behind the entire storefront browse experience.
+ *
+ * Home, `/catalog`, every `/catalog/[categorySlug]`, every search, every price
+ * range and every sort are now derived from this one array by
+ * `selectCatalogProducts`. Previously each of those was its own cached query:
+ * roughly six entries per category once sort and stock were multiplied out,
+ * each expiring on its own schedule and each waking the database to refill —
+ * and free-text search was excluded from caching entirely, so any URL a
+ * crawler invented went straight to Postgres. One entry replaces all of it, at
+ * one fill per `STOREFRONT_REVALIDATE_SECONDS` for the whole storefront.
+ */
+export async function getCatalogSnapshotCore(): Promise<StorefrontProductCard[]> {
   const rows = await db
     .select(PRODUCT_CARD_SELECT)
     .from(products)
     .innerJoin(categories, eq(products.categoryId, categories.id))
     .where(eq(products.isActive, true))
     .orderBy(desc(products.createdAt))
-    .limit(limit);
+    .limit(CATALOG_SNAPSHOT_MAX_ROWS);
 
   return hydrateProductCards(rows);
 }
 
-export async function getFeaturedProducts(limit = 8): Promise<StorefrontProductCard[]> {
+async function getCatalogSnapshotCached(): Promise<StorefrontProductCard[]> {
   "use cache";
   cacheLife("storefront");
   cacheTag("products");
-  return getFeaturedProductsCore(limit);
+  return getCatalogSnapshotCore();
 }
 
-export type CatalogSort = "newest" | "price-asc" | "price-desc";
+// `cache()` on top of `use cache` for the same reason
+// `getStorefrontProductBySlug` uses it: the home page alone reads this twice
+// (the hero photo and the featured grid), and `use cache` dedupes across
+// requests, not within one.
+export const getCatalogSnapshot = cache(getCatalogSnapshotCached);
 
-export type CatalogFilters = {
-  categorySlug?: string;
-  search?: string;
-  minPrice?: number;
-  maxPrice?: number;
-  inStockOnly?: boolean;
-  sort?: CatalogSort;
-};
+export async function getFeaturedProductsCore(limit = 8): Promise<StorefrontProductCard[]> {
+  return (await getCatalogSnapshotCore()).slice(0, limit);
+}
 
-// A small shop's active catalog comfortably fits in one page — no pagination
-// in task 09's scope, just a sane upper bound so a future data glitch can't
-// return an unbounded response.
-const CATALOG_MAX_RESULTS = 200;
+/** The newest `limit` products — the snapshot is already in that order. */
+export async function getFeaturedProducts(limit = 8): Promise<StorefrontProductCard[]> {
+  return (await getCatalogSnapshot()).slice(0, limit);
+}
+
+export type { CatalogFilters, CatalogSort };
 
 export async function listCatalogProductsCore(filters: CatalogFilters): Promise<StorefrontProductCard[]> {
-  const conditions: SQL[] = [eq(products.isActive, true)];
-  if (filters.categorySlug) conditions.push(eq(categories.slug, filters.categorySlug));
-  const term = containsTerm(filters.search);
-  if (term) conditions.push(or(ilike(products.nameFr, term), ilike(products.nameAr, term))!);
-  if (filters.minPrice != null) conditions.push(gte(products.price, filters.minPrice));
-  if (filters.maxPrice != null) conditions.push(lte(products.price, filters.maxPrice));
-  if (filters.inStockOnly) conditions.push(or(gt(products.stockQty, 0), eq(products.allowBackorder, true))!);
-
-  const rows = await db
-    .select(PRODUCT_CARD_SELECT)
-    .from(products)
-    .innerJoin(categories, eq(products.categoryId, categories.id))
-    .where(and(...conditions))
-    .orderBy(desc(products.createdAt))
-    .limit(CATALOG_MAX_RESULTS);
-
-  // Base `price` filters/orders in SQL (cheap, indexable); the customer's
-  // actually-perceived price only exists after the per-row promotion lookup,
-  // so "price asc/desc" re-sorts the hydrated cards by `effectivePrice`
-  // rather than trusting SQL's base-price order.
-  const cards = await hydrateProductCards(rows);
-
-  if (filters.sort === "price-asc") return [...cards].sort((a, b) => a.effectivePrice - b.effectivePrice);
-  if (filters.sort === "price-desc") return [...cards].sort((a, b) => b.effectivePrice - a.effectivePrice);
-  return cards;
+  return selectCatalogProducts(await getCatalogSnapshotCore(), filters, CATALOG_MAX_RESULTS);
 }
 
-async function listCatalogProductsCached(filters: CatalogFilters): Promise<StorefrontProductCard[]> {
-  "use cache";
-  cacheLife("storefront");
-  cacheTag("products");
-  return listCatalogProductsCore(filters);
-}
-
-/**
- * A `use cache` key is derived from the arguments, so caching a filter
- * object carrying raw `?q=` / `?min=` / `?max=` values mints one permanent
- * entry — each holding a fully hydrated product list — per distinct query
- * string a visitor can invent. Category, stock and sort are a small closed
- * set and stay cached; free text and price ranges are unbounded in
- * cardinality, and at this catalog size they are cheap to run uncached.
- */
 export async function listCatalogProducts(filters: CatalogFilters): Promise<StorefrontProductCard[]> {
-  const isBounded = !filters.search?.trim() && filters.minPrice == null && filters.maxPrice == null;
-  return isBounded ? listCatalogProductsCached(filters) : listCatalogProductsCore(filters);
+  return selectCatalogProducts(await getCatalogSnapshot(), filters, CATALOG_MAX_RESULTS);
 }
 
 export type StorefrontVariant = {
@@ -433,38 +449,7 @@ async function firstImagesByBundle(bundleIds: string[]): Promise<Map<string, str
   return byBundle;
 }
 
-export async function getHomeBundlesCore(limit = 6): Promise<StorefrontBundleCard[]> {
-  const rows = await db
-    .select({ id: bundles.id, nameAr: bundles.nameAr, nameFr: bundles.nameFr, slug: bundles.slug, price: bundles.price })
-    .from(bundles)
-    .where(eq(bundles.isActive, true))
-    .orderBy(desc(bundles.createdAt))
-    .limit(limit);
 
-  const [images, prices] = await Promise.all([
-    firstImagesByBundle(rows.map((row) => row.id)),
-    getEffectivePrices(
-      rows.map((row): PricingItem => ({ kind: "bundle", id: row.id, price: row.price })),
-      "web",
-    ),
-  ]);
-
-  return rows.map((row) => ({
-    id: row.id,
-    nameAr: row.nameAr,
-    nameFr: row.nameFr,
-    slug: row.slug,
-    image: images.get(row.id) ?? null,
-    effectivePrice: (prices.get(row.id) ?? { price: row.price }).price,
-  }));
-}
-
-export async function getHomeBundles(limit = 6): Promise<StorefrontBundleCard[]> {
-  "use cache";
-  cacheLife("storefront");
-  cacheTag("bundles");
-  return getHomeBundlesCore(limit);
-}
 
 export type StorefrontBundleListCard = StorefrontBundleCard & {
   itemCount: number;
@@ -554,11 +539,27 @@ export async function listCatalogBundlesCore(): Promise<StorefrontBundleListCard
   });
 }
 
-export async function listCatalogBundles(): Promise<StorefrontBundleListCard[]> {
+async function listCatalogBundlesCached(): Promise<StorefrontBundleListCard[]> {
   "use cache";
   cacheLife("storefront");
   cacheTag("bundles");
   return listCatalogBundlesCore();
+}
+
+/**
+ * Every active box, newest first — the bundle half of the storefront's browse
+ * snapshot, and the only bundle-list read there is. `/boxes` renders it whole
+ * and the home band takes the first few off the top, where each used to be its
+ * own cached query with its own refill.
+ */
+export const listCatalogBundles = cache(listCatalogBundlesCached);
+
+export async function getHomeBundlesCore(limit = 6): Promise<StorefrontBundleCard[]> {
+  return (await listCatalogBundlesCore()).slice(0, limit);
+}
+
+export async function getHomeBundles(limit = 6): Promise<StorefrontBundleCard[]> {
+  return (await listCatalogBundles()).slice(0, limit);
 }
 
 export type StorefrontBundleItem = {

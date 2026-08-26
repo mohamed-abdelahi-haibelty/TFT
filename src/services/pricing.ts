@@ -1,5 +1,5 @@
 import { and, eq, gt, lte, or, sql } from "drizzle-orm";
-import { db } from "@/src/db/client";
+import { db, type Tx } from "@/src/db/client";
 import { promotionItems, promotions } from "@/src/db/schema";
 
 export type PricingChannel = "web" | "pos";
@@ -127,10 +127,12 @@ export async function getEffectivePrices(
   items: PricingItem[],
   channel: PricingChannel,
   now?: Date,
+  /** Pass a transaction so a sale prices from the same snapshot it writes against. */
+  client: Pick<Tx, "select"> = db,
 ): Promise<Map<string, EffectivePrice>> {
   const clock = now ?? sql`now()`;
 
-  const promoRows = await db
+  const promoRows = await client
     .select({
       productId: promotionItems.productId,
       bundleId: promotionItems.bundleId,

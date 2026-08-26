@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import {
   check,
   index,
@@ -57,7 +57,13 @@ export const orders = pgTable(
     ...timestamps,
   },
   (table) => [
-    index("orders_status_idx").on(table.status),
+    // `listOrdersAdmin` filters on `status` and sorts by `created_at desc`, and
+    // the dashboard's pending-orders panel does `status IN (...)` ordered the
+    // same way. A bare `status` index served neither ordering, so both paid for
+    // a sort; this supersedes it outright, `status` being the leading column.
+    index("orders_status_created_at_idx").on(table.status, desc(table.createdAt)),
+    // Still needed on its own for the unfiltered list and the date-range
+    // filters, which name no status at all.
     index("orders_created_at_idx").on(table.createdAt),
   ],
 );
@@ -82,6 +88,12 @@ export const orderItems = pgTable(
     ...timestamps,
   },
   (table) => [
+    // Postgres does not index a foreign key for you (same note as
+    // `product_images`), and this one was missed. Every order detail read,
+    // `recomputeOrderTotals`, the dashboard's top-products join and the
+    // `ON DELETE CASCADE` that fires when a failed sale deletes its order all
+    // go through this column.
+    index("order_items_order_id_idx").on(table.orderId),
     check("order_items_qty_positive", sql`${table.qty} >= 1`),
     check(
       "order_items_product_xor_bundle",

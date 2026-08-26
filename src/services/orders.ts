@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { z } from "zod";
-import { db } from "@/src/db/client";
+import { db, withTransaction, type Tx } from "@/src/db/client";
 import {
   bundleItems,
   bundles,
@@ -333,61 +333,64 @@ export async function createOrderCore(
   const total = resolved.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
   const discountTotal = subtotal - total;
 
+  // The order, its lines and its `created` event are one unit. This used to
+  // be three independent requests with a `DELETE` in the catch block standing
+  // in for a rollback; now a failure anywhere leaves no trace of the order at
+  // all.
   let created: { id: string; code: string };
   try {
-    created = await insertWithUniqueOrderCode(now, (code) =>
-      db
-        .insert(orders)
-        .values({
-          code,
-          source: "web",
-          status: "pending",
-          customerName: data.customerName,
-          customerPhone: normalizedPhone,
-          city: data.city,
-          delivery: data.city === "ndb" ? "pickup" : "bus",
-          subtotal,
-          discountTotal,
-          total,
-          note: data.note || null,
-          idempotencyKey: data.idempotencyKey ?? null,
-        })
-        .returning({ id: orders.id, code: orders.code })
-        .then(([row]) => row),
-    );
+    created = await withTransaction(async (tx) => {
+      const row = await insertWithUniqueOrderCode(tx, now, (code) =>
+        tx
+          .insert(orders)
+          .values({
+            code,
+            source: "web",
+            status: "pending",
+            customerName: data.customerName,
+            customerPhone: normalizedPhone,
+            city: data.city,
+            delivery: data.city === "ndb" ? "pickup" : "bus",
+            subtotal,
+            discountTotal,
+            total,
+            note: data.note || null,
+            idempotencyKey: data.idempotencyKey ?? null,
+          })
+          .returning({ id: orders.id, code: orders.code })
+          .then(([inserted]) => inserted),
+      );
+
+      await tx.insert(orderItems).values(
+        resolved.map((line) => ({
+          orderId: row.id,
+          productId: line.kind === "product" ? line.productId : null,
+          variantId: line.kind === "product" ? line.variantId : null,
+          bundleId: line.kind === "bundle" ? line.bundleId : null,
+          nameSnapshot: line.nameSnapshot,
+          unitPrice: line.unitPrice,
+          qty: line.qty,
+        })),
+      );
+
+      await tx.insert(orderEvents).values({
+        orderId: row.id,
+        type: "created",
+        payload: { source: "web" },
+      });
+
+      return row;
+    });
   } catch (error) {
     // Two requests carrying the same key raced past the check above; the
-    // index is the authority, and the loser reports the winner's order.
+    // index is the authority, and the loser reports the winner's order. The
+    // lookup runs on `db`, outside the aborted transaction — a constraint
+    // violation poisons its own transaction, so nothing more can be read
+    // through `tx` once one has been raised.
     if (data.idempotencyKey && isUniqueViolation(error, "orders_idempotency_key_unique")) {
       const existing = await existingOrderResult(data.idempotencyKey);
       if (existing) return { ok: true, data: existing };
     }
-    throw error;
-  }
-
-  try {
-    await db.insert(orderItems).values(
-      resolved.map((line) => ({
-        orderId: created.id,
-        productId: line.kind === "product" ? line.productId : null,
-        variantId: line.kind === "product" ? line.variantId : null,
-        bundleId: line.kind === "bundle" ? line.bundleId : null,
-        nameSnapshot: line.nameSnapshot,
-        unitPrice: line.unitPrice,
-        qty: line.qty,
-      })),
-    );
-
-    await db.insert(orderEvents).values({
-      orderId: created.id,
-      type: "created",
-      payload: { source: "web" },
-    });
-  } catch (error) {
-    // neon-http has no transactions (see order-code.ts / sku.ts's own note),
-    // so a failure after the order row lands is a manual rollback — deleting
-    // the order cascades to any order_items/order_events that did commit.
-    await db.delete(orders).where(eq(orders.id, created.id));
     throw error;
   }
 
@@ -772,7 +775,18 @@ export type StockLine = {
   usesVariantStock: boolean;
   qty: number;
   allowBackorder: boolean;
+  /**
+   * A cashier vouching that the item is physically here even though the count
+   * says otherwise (POS only — gated on `inventory.adjust`). Carried on the
+   * line so a whole basket can be expanded in one `loadStockLines` call
+   * instead of one call per line, which is what it used to take to keep each
+   * line's own flag attached to its components.
+   */
+  overridden: boolean;
 };
+
+/** What one stock-tracked unit holds after a write — what the register redraws its tiles from. */
+export type StockLevel = { productId: string; variantId: string | null; stockQty: number };
 
 export type StockLineSource = {
   productId: string | null;
@@ -780,6 +794,8 @@ export type StockLineSource = {
   bundleId: string | null;
   qty: number;
   nameSnapshot: string;
+  /** POS only; defaults to `false` everywhere else. */
+  overridden?: boolean;
 };
 
 /**
@@ -791,23 +807,23 @@ export type StockLineSource = {
  * composition, same simplification `createOrderCore`'s own availability
  * check already makes).
  */
-export async function loadStockLines(sources: StockLineSource[]): Promise<StockLine[]> {
+export async function loadStockLines(tx: Tx, sources: StockLineSource[]): Promise<StockLine[]> {
   const productIds = [...new Set(sources.filter((s) => s.productId).map((s) => s.productId!))];
   const variantIds = [...new Set(sources.filter((s) => s.variantId).map((s) => s.variantId!))];
   const bundleIds = [...new Set(sources.filter((s) => s.bundleId).map((s) => s.bundleId!))];
 
   const [productRows, variantRows, bundleComponentRows] = await Promise.all([
     productIds.length
-      ? db.select({ id: products.id, allowBackorder: products.allowBackorder }).from(products).where(inArray(products.id, productIds))
+      ? tx.select({ id: products.id, allowBackorder: products.allowBackorder }).from(products).where(inArray(products.id, productIds))
       : Promise.resolve([]),
     variantIds.length
-      ? db
+      ? tx
           .select({ id: productVariants.id, stockQty: productVariants.stockQty })
           .from(productVariants)
           .where(inArray(productVariants.id, variantIds))
       : Promise.resolve([]),
     bundleIds.length
-      ? db
+      ? tx
           .select({
             bundleId: bundleItems.bundleId,
             qty: bundleItems.qty,
@@ -846,6 +862,7 @@ export async function loadStockLines(sources: StockLineSource[]): Promise<StockL
         usesVariantStock,
         qty: source.qty,
         allowBackorder: product.allowBackorder,
+        overridden: source.overridden ?? false,
       });
     } else if (source.bundleId) {
       const components = componentsByBundle.get(source.bundleId) ?? [];
@@ -858,6 +875,9 @@ export async function loadStockLines(sources: StockLineSource[]): Promise<StockL
           usesVariantStock,
           qty: source.qty * component.qty,
           allowBackorder: component.productAllowBackorder,
+          // A bundle's components inherit the top-level line's override, so a
+          // cashier overriding a box overrides everything inside it.
+          overridden: source.overridden ?? false,
         });
       }
     }
@@ -866,48 +886,74 @@ export async function loadStockLines(sources: StockLineSource[]): Promise<StockL
 }
 
 /**
+ * Thrown when a non-backorder line cannot be satisfied, to abort the
+ * transaction it is running in.
+ *
+ * This is how "all or nothing" is expressed now. It used to be a `false`
+ * return value that each caller had to notice and answer by replaying its own
+ * writes backwards — a compensating-undo scheme that was, by some distance,
+ * the most delicate code in the repo, and that could itself fail halfway and
+ * leave recorded stock permanently adrift. `ROLLBACK` does the same job
+ * unconditionally, so the label is all that has to survive the unwind.
+ */
+export class InsufficientStockError extends Error {
+  constructor(readonly itemLabel: string) {
+    super(`Insufficient stock for ${itemLabel}`);
+    this.name = "InsufficientStockError";
+  }
+}
+
+/**
  * Atomic, conditional decrement (task 13: "conditional update") — a
  * non-backorder line's `WHERE` clause requires enough stock, so a race lost
  * between a pre-check and this write still can't drive it negative; a
  * backorder line has no floor at all and is allowed to go negative,
  * visibly (see the relaxed `products_stock_qty_non_negative` check,
- * migration `0003`). Returns `false` without writing anything when the
- * conditional update matched zero rows.
+ * migration `0003`).
+ *
+ * The conditional `WHERE` still earns its keep inside a transaction: it is
+ * what makes the decrement safe against a concurrent register, which
+ * `READ COMMITTED` on its own does not give.
+ *
+ * Throws `InsufficientStockError` when the conditional update matches no rows.
+ * Returns the level the decrement left behind, so a caller can tell a client
+ * what the new count is without reading it back.
  */
 export async function decrementStockLine(
+  tx: Tx,
   line: StockLine,
   orderId: string,
   actorId: string | null,
   reason: (typeof stockMovements.reason.enumValues)[number],
   note?: string,
-): Promise<boolean> {
-  let succeeded: boolean;
+): Promise<StockLevel> {
+  let remaining: number | undefined;
 
   if (line.usesVariantStock) {
     const where = line.allowBackorder
       ? eq(productVariants.id, line.variantId!)
       : and(eq(productVariants.id, line.variantId!), gte(productVariants.stockQty, line.qty));
-    const rows = await db
+    const rows = await tx
       .update(productVariants)
       .set({ stockQty: sql`${productVariants.stockQty} - ${line.qty}` })
       .where(where)
-      .returning({ id: productVariants.id });
-    succeeded = rows.length > 0;
+      .returning({ stockQty: productVariants.stockQty });
+    remaining = rows[0]?.stockQty ?? undefined;
   } else {
     const where = line.allowBackorder
       ? eq(products.id, line.productId)
       : and(eq(products.id, line.productId), gte(products.stockQty, line.qty));
-    const rows = await db
+    const rows = await tx
       .update(products)
       .set({ stockQty: sql`${products.stockQty} - ${line.qty}` })
       .where(where)
-      .returning({ id: products.id });
-    succeeded = rows.length > 0;
+      .returning({ stockQty: products.stockQty });
+    remaining = rows[0]?.stockQty;
   }
 
-  if (!succeeded) return false;
+  if (remaining === undefined) throw new InsufficientStockError(line.itemLabel);
 
-  await db.insert(stockMovements).values({
+  await tx.insert(stockMovements).values({
     productId: line.productId,
     variantId: line.variantId,
     delta: -line.qty,
@@ -916,10 +962,12 @@ export async function decrementStockLine(
     actorId,
     note: note ?? null,
   });
-  return true;
+
+  return { productId: line.productId, variantId: line.variantId, stockQty: remaining };
 }
 
 export async function incrementStockLine(
+  tx: Tx,
   line: StockLine,
   orderId: string,
   actorId: string | null,
@@ -927,18 +975,18 @@ export async function incrementStockLine(
   note?: string,
 ): Promise<void> {
   if (line.usesVariantStock) {
-    await db
+    await tx
       .update(productVariants)
       .set({ stockQty: sql`${productVariants.stockQty} + ${line.qty}` })
       .where(eq(productVariants.id, line.variantId!));
   } else {
-    await db
+    await tx
       .update(products)
       .set({ stockQty: sql`${products.stockQty} + ${line.qty}` })
       .where(eq(products.id, line.productId));
   }
 
-  await db.insert(stockMovements).values({
+  await tx.insert(stockMovements).values({
     productId: line.productId,
     variantId: line.variantId,
     delta: line.qty,
@@ -949,23 +997,37 @@ export async function incrementStockLine(
   });
 }
 
-/** All-or-nothing: pre-checked-but-atomic decrement of every line, rolling back (increment) whatever already applied the moment one line's conditional update fails. Returns the failing line's label, or `null` on full success. */
+/** Every line or none: the first one that cannot be satisfied throws, and the transaction takes the rest back. */
 export async function decrementStockLines(
+  tx: Tx,
   lines: StockLine[],
   orderId: string,
   actorId: string | null,
   reason: (typeof stockMovements.reason.enumValues)[number],
-): Promise<string | null> {
-  const applied: StockLine[] = [];
-  for (const line of lines) {
-    const ok = await decrementStockLine(line, orderId, actorId, reason);
-    if (!ok) {
-      for (const done of applied) await incrementStockLine(done, orderId, actorId, "correction");
-      return line.itemLabel;
+): Promise<void> {
+  for (const line of lines) await decrementStockLine(tx, line, orderId, actorId, reason);
+}
+
+/**
+ * Runs `fn` in one transaction and translates the one error that is not a
+ * fault — a line the shop cannot actually supply — into the result the caller
+ * reports. Anything else propagates, having already rolled back.
+ */
+async function inOrderTransaction<T>(
+  messages: OrderAdminMessages,
+  fn: (tx: Tx) => Promise<ServiceResult<T>>,
+): Promise<ServiceResult<T>> {
+  try {
+    return await withTransaction(fn);
+  } catch (error) {
+    if (error instanceof InsufficientStockError) {
+      return {
+        ok: false,
+        error: { code: "CONFLICT", message: messages.insufficientStock, details: { itemName: error.itemLabel } },
+      };
     }
-    applied.push(line);
+    throw error;
   }
-  return null;
 }
 
 /**
@@ -977,8 +1039,8 @@ export async function decrementStockLines(
  * the derived gap between the two — a display figure, not a source of
  * truth for what's actually charged.
  */
-async function recomputeOrderTotals(orderId: string): Promise<void> {
-  const items = await db
+async function recomputeOrderTotals(tx: Tx, orderId: string): Promise<void> {
+  const items = await tx
     .select({
       productId: orderItems.productId,
       bundleId: orderItems.bundleId,
@@ -993,10 +1055,10 @@ async function recomputeOrderTotals(orderId: string): Promise<void> {
 
   const [productRows, bundleRows] = await Promise.all([
     productIds.length
-      ? db.select({ id: products.id, price: products.price }).from(products).where(inArray(products.id, productIds))
+      ? tx.select({ id: products.id, price: products.price }).from(products).where(inArray(products.id, productIds))
       : Promise.resolve([]),
     bundleIds.length
-      ? db.select({ id: bundles.id, price: bundles.price }).from(bundles).where(inArray(bundles.id, bundleIds))
+      ? tx.select({ id: bundles.id, price: bundles.price }).from(bundles).where(inArray(bundles.id, bundleIds))
       : Promise.resolve([]),
   ]);
   const priceByProduct = new Map(productRows.map((row) => [row.id, row.price]));
@@ -1012,37 +1074,34 @@ async function recomputeOrderTotals(orderId: string): Promise<void> {
     total += item.unitPrice * item.qty;
   }
 
-  await db.update(orders).set({ subtotal, discountTotal: subtotal - total, total }).where(eq(orders.id, orderId));
+  await tx.update(orders).set({ subtotal, discountTotal: subtotal - total, total }).where(eq(orders.id, orderId));
 }
 
 /**
  * Atomically move an order from one exact status to another, returning
  * `false` when it was no longer in `from` — because someone else got there
- * first. `neon-http` has no transactions, so a read-then-write status guard is
- * not a guard at all: this conditional update is the only thing that makes a
- * lifecycle transition exclusive, and it is the same idiom
- * `decrementStockLine` already uses for stock.
+ * first.
+ *
+ * A read-then-write status guard is not a guard: under `READ COMMITTED` two
+ * operators can both pass the read inside their own transactions. This
+ * conditional update is what makes a lifecycle transition exclusive, and it is
+ * the same idiom `decrementStockLine` uses for stock. There is no longer a
+ * `releaseOrderStatus` counterpart — when the work behind a claim fails, the
+ * transaction rolls the claim back along with everything else.
  */
 async function claimOrderStatus(
+  tx: Tx,
   id: string,
   from: OrderStatusValue,
   to: OrderStatusValue,
   extra?: Partial<{ busCompany: string; busNote: string | null }>,
 ): Promise<boolean> {
-  const rows = await db
+  const rows = await tx
     .update(orders)
     .set({ status: to, ...extra })
     .where(and(eq(orders.id, id), eq(orders.status, from)))
     .returning({ id: orders.id });
   return rows.length > 0;
-}
-
-/** Hands a claimed transition back when the work behind it failed. */
-async function releaseOrderStatus(id: string, from: OrderStatusValue, to: OrderStatusValue): Promise<void> {
-  await db
-    .update(orders)
-    .set({ status: to })
-    .where(and(eq(orders.id, id), eq(orders.status, from)));
 }
 
 // --- Status transitions -----------------------------------------------------
@@ -1088,72 +1147,60 @@ export async function confirmOrderCore(
   messages: OrderAdminMessages,
   input?: ConfirmOrderInput,
 ): Promise<ServiceResult<{ id: string }>> {
-  const [order] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
-  if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
-  if (order.status !== "pending") {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
+  return inOrderTransaction(messages, async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, id)).limit(1);
+    if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
+    if (order.status !== "pending") {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+    }
 
-  if (order.source === "web" && !input?.paymentMethod) {
-    return { ok: false, error: { code: "VALIDATION", message: messages.paymentMethodRequired } };
-  }
+    if (order.source === "web" && !input?.paymentMethod) {
+      return { ok: false, error: { code: "VALIDATION", message: messages.paymentMethodRequired } };
+    }
 
-  // Claim the transition before touching stock. The read above is advisory —
-  // it produces the good error message and decides whether a payment method is
-  // required — but this conditional update is what actually makes the
-  // transition exclusive. Without it, two operators confirming the same order
-  // from two devices both passed the read and both decremented.
-  if (!(await claimOrderStatus(id, "pending", "confirmed"))) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
+    // Claim the transition before touching stock. The read above is advisory —
+    // it produces the good error message and decides whether a payment method is
+    // required — but this conditional update is what actually makes the
+    // transition exclusive. Without it, two operators confirming the same order
+    // from two devices both passed the read and both decremented.
+    if (!(await claimOrderStatus(tx, id, "pending", "confirmed"))) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+    }
 
-  const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-  const lines = await loadStockLines(
-    itemRows.map((row) => ({
-      productId: row.productId,
-      variantId: row.variantId,
-      bundleId: row.bundleId,
-      qty: row.qty,
-      nameSnapshot: row.nameSnapshot,
-    })),
-  );
+    const itemRows = await tx.select().from(orderItems).where(eq(orderItems.orderId, id));
+    const lines = await loadStockLines(
+      tx,
+      itemRows.map((row) => ({
+        productId: row.productId,
+        variantId: row.variantId,
+        bundleId: row.bundleId,
+        qty: row.qty,
+        nameSnapshot: row.nameSnapshot,
+      })),
+    );
 
-  let failedItem: string | null;
-  try {
-    failedItem = await decrementStockLines(lines, id, actorId, order.source === "pos" ? "pos_sale" : "web_sale");
-  } catch (error) {
-    await releaseOrderStatus(id, "confirmed", "pending");
-    throw error;
-  }
+    // A short line throws, which takes the claim above back out with it.
+    await decrementStockLines(tx, lines, id, actorId, order.source === "pos" ? "pos_sale" : "web_sale");
 
-  if (failedItem) {
-    // `decrementStockLines` already rolled back whatever it applied, so
-    // handing the order back to `pending` leaves nothing half-done.
-    await releaseOrderStatus(id, "confirmed", "pending");
-    return {
-      ok: false,
-      error: { code: "CONFLICT", message: messages.insufficientStock, details: { itemName: failedItem } },
-    };
-  }
+    const patch: { paymentMethod?: PaymentMethodValue; paymentNote?: string } = {};
+    if (input?.paymentMethod) patch.paymentMethod = input.paymentMethod;
+    if (input?.paymentNote) patch.paymentNote = input.paymentNote;
+    if (Object.keys(patch).length) await tx.update(orders).set(patch).where(eq(orders.id, id));
 
-  const patch: { paymentMethod?: PaymentMethodValue; paymentNote?: string } = {};
-  if (input?.paymentMethod) patch.paymentMethod = input.paymentMethod;
-  if (input?.paymentNote) patch.paymentNote = input.paymentNote;
-  if (Object.keys(patch).length) await db.update(orders).set(patch).where(eq(orders.id, id));
+    await tx.insert(orderEvents).values({
+      orderId: id,
+      actorId,
+      type: "status_changed",
+      payload: {
+        from: "pending",
+        to: "confirmed",
+        ...(input?.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
+        ...(input?.paymentNote ? { paymentNote: input.paymentNote } : {}),
+      },
+    });
 
-  await db.insert(orderEvents).values({
-    orderId: id,
-    actorId,
-    type: "status_changed",
-    payload: {
-      from: "pending",
-      to: "confirmed",
-      ...(input?.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
-      ...(input?.paymentNote ? { paymentNote: input.paymentNote } : {}),
-    },
+    return { ok: true, data: { id } };
   });
-
-  return { ok: true, data: { id } };
 }
 
 const advanceStatusSchema = z.object({
@@ -1188,37 +1235,41 @@ export async function advanceOrderStatusCore(
   const parsed = advanceStatusSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
 
-  const [order] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
-  if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
+  // No stock effect, but the claim and its audit event still have to land
+  // together — a transition with no `status_changed` behind it is a silent one.
+  return withTransaction(async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, id)).limit(1);
+    if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
 
-  const current = order.status as OrderStatusValue;
-  const delivery = order.delivery as "pickup" | "bus" | null;
-  if (!isValidAdvance(current, delivery, parsed.data.target)) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
-
-  const extra: Partial<{ busCompany: string; busNote: string | null }> = {};
-
-  if (parsed.data.target === "shipped") {
-    if (!parsed.data.busCompany) {
-      return { ok: false, error: { code: "VALIDATION", message: messages.busCompanyRequired } };
+    const current = order.status as OrderStatusValue;
+    const delivery = order.delivery as "pickup" | "bus" | null;
+    if (!isValidAdvance(current, delivery, parsed.data.target)) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
     }
-    extra.busCompany = parsed.data.busCompany;
-    extra.busNote = parsed.data.busNote ?? null;
-  }
 
-  if (!(await claimOrderStatus(id, current, parsed.data.target, extra))) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
+    const extra: Partial<{ busCompany: string; busNote: string | null }> = {};
 
-  await db.insert(orderEvents).values({
-    orderId: id,
-    actorId,
-    type: "status_changed",
-    payload: { from: current, to: parsed.data.target },
+    if (parsed.data.target === "shipped") {
+      if (!parsed.data.busCompany) {
+        return { ok: false, error: { code: "VALIDATION", message: messages.busCompanyRequired } };
+      }
+      extra.busCompany = parsed.data.busCompany;
+      extra.busNote = parsed.data.busNote ?? null;
+    }
+
+    if (!(await claimOrderStatus(tx, id, current, parsed.data.target, extra))) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+    }
+
+    await tx.insert(orderEvents).values({
+      orderId: id,
+      actorId,
+      type: "status_changed",
+      payload: { from: current, to: parsed.data.target },
+    });
+
+    return { ok: true, data: { id } };
   });
-
-  return { ok: true, data: { id } };
 }
 
 const cancelOrderSchema = z.object({ reason: z.string().trim().min(1).max(500) });
@@ -1239,25 +1290,26 @@ export async function cancelOrderCore(
   const parsed = cancelOrderSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: { code: "VALIDATION", message: messages.reasonRequired } };
 
-  const [order] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
-  if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
+  return inOrderTransaction(messages, async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, id)).limit(1);
+    if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
 
-  const current = order.status as OrderStatusValue;
-  if (current === "delivered" || current === "cancelled" || current === "voided") {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
+    const current = order.status as OrderStatusValue;
+    if (current === "delivered" || current === "cancelled" || current === "voided") {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+    }
 
-  // Claim first, restock second — the reverse order let two concurrent
-  // cancels each pass the status read and each restock the same lines,
-  // inventing inventory that was never returned.
-  if (!(await claimOrderStatus(id, current, "cancelled"))) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
+    // Claim first, restock second — the reverse order let two concurrent
+    // cancels each pass the status read and each restock the same lines,
+    // inventing inventory that was never returned.
+    if (!(await claimOrderStatus(tx, id, current, "cancelled"))) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+    }
 
-  if (current !== "pending") {
-    try {
-      const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    if (current !== "pending") {
+      const itemRows = await tx.select().from(orderItems).where(eq(orderItems.orderId, id));
       const lines = await loadStockLines(
+        tx,
         itemRows.map((row) => ({
           productId: row.productId,
           variantId: row.variantId,
@@ -1266,21 +1318,18 @@ export async function cancelOrderCore(
           nameSnapshot: row.nameSnapshot,
         })),
       );
-      for (const line of lines) await incrementStockLine(line, id, actorId, "cancel_restock");
-    } catch (error) {
-      await releaseOrderStatus(id, "cancelled", current);
-      throw error;
+      for (const line of lines) await incrementStockLine(tx, line, id, actorId, "cancel_restock");
     }
-  }
 
-  await db.insert(orderEvents).values({
-    orderId: id,
-    actorId,
-    type: "cancelled",
-    payload: { reason: parsed.data.reason, from: current },
+    await tx.insert(orderEvents).values({
+      orderId: id,
+      actorId,
+      type: "cancelled",
+      payload: { reason: parsed.data.reason, from: current },
+    });
+
+    return { ok: true, data: { id } };
   });
-
-  return { ok: true, data: { id } };
 }
 
 const voidOrderSchema = z.object({ reason: z.string().trim().min(1).max(500) });
@@ -1307,20 +1356,21 @@ export async function voidOrderCore(
   const parsed = voidOrderSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: { code: "VALIDATION", message: messages.reasonRequired } };
 
-  const [order] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
-  if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
+  return inOrderTransaction(messages, async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, id)).limit(1);
+    if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
 
-  if (order.source !== "pos" || order.status !== "delivered") {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
+    if (order.source !== "pos" || order.status !== "delivered") {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+    }
 
-  if (!(await claimOrderStatus(id, "delivered", "voided"))) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
+    if (!(await claimOrderStatus(tx, id, "delivered", "voided"))) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+    }
 
-  try {
-    const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+    const itemRows = await tx.select().from(orderItems).where(eq(orderItems.orderId, id));
     const lines = await loadStockLines(
+      tx,
       itemRows.map((row) => ({
         productId: row.productId,
         variantId: row.variantId,
@@ -1329,20 +1379,17 @@ export async function voidOrderCore(
         nameSnapshot: row.nameSnapshot,
       })),
     );
-    for (const line of lines) await incrementStockLine(line, id, actorId, "void_restock");
-  } catch (error) {
-    await releaseOrderStatus(id, "voided", "delivered");
-    throw error;
-  }
+    for (const line of lines) await incrementStockLine(tx, line, id, actorId, "void_restock");
 
-  await db.insert(orderEvents).values({
-    orderId: id,
-    actorId,
-    type: "voided",
-    payload: { reason: parsed.data.reason },
+    await tx.insert(orderEvents).values({
+      orderId: id,
+      actorId,
+      type: "voided",
+      payload: { reason: parsed.data.reason },
+    });
+
+    return { ok: true, data: { id } };
   });
-
-  return { ok: true, data: { id } };
 }
 
 // --- Item picker options ----------------------------------------------------
@@ -1486,95 +1533,92 @@ export async function addOrderItemCore(
   const parsed = addOrderItemSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
 
-  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-  if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
-  const status = order.status as OrderStatusValue;
-  if (!EDITABLE_STATUSES.includes(status)) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
-
   const now = new Date();
-  let resolvedLine: {
-    productId: string | null;
-    variantId: string | null;
-    bundleId: string | null;
-    nameSnapshot: string;
-    unitPrice: number;
-  };
 
-  if (parsed.data.kind === "product") {
-    const [product] = await db.select().from(products).where(eq(products.id, parsed.data.productId!)).limit(1);
-    if (!product || !product.isActive) {
-      return { ok: false, error: { code: "CONFLICT", message: messages.insufficientStock } };
+  return inOrderTransaction(messages, async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+    if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
+    const status = order.status as OrderStatusValue;
+    if (!EDITABLE_STATUSES.includes(status)) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
     }
-    let variant: typeof productVariants.$inferSelect | null = null;
-    if (parsed.data.variantId) {
-      const rows = await db.select().from(productVariants).where(eq(productVariants.id, parsed.data.variantId)).limit(1);
-      variant = rows[0] ?? null;
-      if (!variant || !variant.isActive || variant.productId !== product.id) {
+
+    let resolvedLine: {
+      productId: string | null;
+      variantId: string | null;
+      bundleId: string | null;
+      nameSnapshot: string;
+      unitPrice: number;
+    };
+
+    if (parsed.data.kind === "product") {
+      const [product] = await tx.select().from(products).where(eq(products.id, parsed.data.productId!)).limit(1);
+      if (!product || !product.isActive) {
         return { ok: false, error: { code: "CONFLICT", message: messages.insufficientStock } };
       }
-    }
-    const effective = await getEffectivePrice(
-      { kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice },
-      order.source as PricingChannel,
-      now,
-    );
-    const productName = localized(locale, product.nameAr, product.nameFr);
-    resolvedLine = {
-      productId: product.id,
-      variantId: variant?.id ?? null,
-      bundleId: null,
-      nameSnapshot: variant ? `${productName} — ${localized(locale, variant.nameAr, variant.nameFr)}` : productName,
-      unitPrice: effective.price,
-    };
-  } else {
-    const [bundle] = await db.select().from(bundles).where(eq(bundles.id, parsed.data.bundleId!)).limit(1);
-    if (!bundle || !bundle.isActive) {
-      return { ok: false, error: { code: "CONFLICT", message: messages.insufficientStock } };
-    }
-    const effective = await getEffectivePrice({ kind: "bundle", id: bundle.id, price: bundle.price }, order.source as PricingChannel, now);
-    resolvedLine = {
-      productId: null,
-      variantId: null,
-      bundleId: bundle.id,
-      nameSnapshot: localized(locale, bundle.nameAr, bundle.nameFr),
-      unitPrice: effective.price,
-    };
-  }
-
-  if (status !== "pending") {
-    const lines = await loadStockLines([
-      { ...resolvedLine, qty: parsed.data.qty, nameSnapshot: resolvedLine.nameSnapshot },
-    ]);
-    const failedItem = await decrementStockLines(lines, orderId, actorId, order.source === "pos" ? "pos_sale" : "web_sale");
-    if (failedItem) {
-      return {
-        ok: false,
-        error: { code: "CONFLICT", message: messages.insufficientStock, details: { itemName: failedItem } },
+      let variant: typeof productVariants.$inferSelect | null = null;
+      if (parsed.data.variantId) {
+        const rows = await tx.select().from(productVariants).where(eq(productVariants.id, parsed.data.variantId)).limit(1);
+        variant = rows[0] ?? null;
+        if (!variant || !variant.isActive || variant.productId !== product.id) {
+          return { ok: false, error: { code: "CONFLICT", message: messages.insufficientStock } };
+        }
+      }
+      const effective = await getEffectivePrice(
+        { kind: "product", id: product.id, price: product.price, discountPrice: product.discountPrice },
+        order.source as PricingChannel,
+        now,
+      );
+      const productName = localized(locale, product.nameAr, product.nameFr);
+      resolvedLine = {
+        productId: product.id,
+        variantId: variant?.id ?? null,
+        bundleId: null,
+        nameSnapshot: variant ? `${productName} — ${localized(locale, variant.nameAr, variant.nameFr)}` : productName,
+        unitPrice: effective.price,
+      };
+    } else {
+      const [bundle] = await tx.select().from(bundles).where(eq(bundles.id, parsed.data.bundleId!)).limit(1);
+      if (!bundle || !bundle.isActive) {
+        return { ok: false, error: { code: "CONFLICT", message: messages.insufficientStock } };
+      }
+      const effective = await getEffectivePrice({ kind: "bundle", id: bundle.id, price: bundle.price }, order.source as PricingChannel, now);
+      resolvedLine = {
+        productId: null,
+        variantId: null,
+        bundleId: bundle.id,
+        nameSnapshot: localized(locale, bundle.nameAr, bundle.nameFr),
+        unitPrice: effective.price,
       };
     }
-  }
 
-  const [inserted] = await db
-    .insert(orderItems)
-    .values({ orderId, ...resolvedLine, qty: parsed.data.qty })
-    .returning({ id: orderItems.id });
+    if (status !== "pending") {
+      const lines = await loadStockLines(tx, [
+        { ...resolvedLine, qty: parsed.data.qty, nameSnapshot: resolvedLine.nameSnapshot },
+      ]);
+      await decrementStockLines(tx, lines, orderId, actorId, order.source === "pos" ? "pos_sale" : "web_sale");
+    }
 
-  await db.insert(orderEvents).values({
-    orderId,
-    actorId,
-    type: "items_edited",
-    payload: {
-      itemId: inserted.id,
-      before: null,
-      after: { nameSnapshot: resolvedLine.nameSnapshot, unitPrice: resolvedLine.unitPrice, qty: parsed.data.qty },
-    },
+    const [inserted] = await tx
+      .insert(orderItems)
+      .values({ orderId, ...resolvedLine, qty: parsed.data.qty })
+      .returning({ id: orderItems.id });
+
+    await tx.insert(orderEvents).values({
+      orderId,
+      actorId,
+      type: "items_edited",
+      payload: {
+        itemId: inserted.id,
+        before: null,
+        after: { nameSnapshot: resolvedLine.nameSnapshot, unitPrice: resolvedLine.unitPrice, qty: parsed.data.qty },
+      },
+    });
+
+    await recomputeOrderTotals(tx, orderId);
+
+    return { ok: true, data: { id: inserted.id } };
   });
-
-  await recomputeOrderTotals(orderId);
-
-  return { ok: true, data: { id: inserted.id } };
 }
 
 const updateItemQtySchema = z.object({ qty: z.number().int().min(1).max(99) });
@@ -1599,71 +1643,67 @@ export async function updateOrderItemQtyCore(
   const parsed = updateItemQtySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: { code: "VALIDATION", message: messages.invalidInput } };
 
-  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-  if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
-  const status = order.status as OrderStatusValue;
-  if (!EDITABLE_STATUSES.includes(status)) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
-
-  const [item] = await db
-    .select()
-    .from(orderItems)
-    .where(and(eq(orderItems.id, itemId), eq(orderItems.orderId, orderId)))
-    .limit(1);
-  if (!item) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
-
-  const oldQty = item.qty;
-  const newQty = parsed.data.qty;
-  if (newQty === oldQty) return { ok: true, data: { id: item.id } };
-
-  // The line keeps the price it was sold at. Re-deriving it here moved what
-  // the customer owes every time an admin nudged a quantity — including
-  // downwards, on an order already confirmed and paid for over WhatsApp —
-  // with nothing but a generic `items_edited` event to explain the change.
-  // Adding a line still prices at today's rate; that is a new agreement.
-  const newUnitPrice = item.unitPrice;
-
-  const delta = newQty - oldQty;
-  if (status !== "pending" && delta !== 0) {
-    const lines = await loadStockLines([
-      {
-        productId: item.productId,
-        variantId: item.variantId,
-        bundleId: item.bundleId,
-        qty: Math.abs(delta),
-        nameSnapshot: item.nameSnapshot,
-      },
-    ]);
-    if (delta > 0) {
-      const failedItem = await decrementStockLines(lines, orderId, actorId, order.source === "pos" ? "pos_sale" : "web_sale");
-      if (failedItem) {
-        return {
-          ok: false,
-          error: { code: "CONFLICT", message: messages.insufficientStock, details: { itemName: failedItem } },
-        };
-      }
-    } else {
-      for (const line of lines) await incrementStockLine(line, orderId, actorId, "correction");
+  return inOrderTransaction(messages, async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+    if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
+    const status = order.status as OrderStatusValue;
+    if (!EDITABLE_STATUSES.includes(status)) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
     }
-  }
 
-  await db.update(orderItems).set({ qty: newQty, unitPrice: newUnitPrice }).where(eq(orderItems.id, itemId));
+    const [item] = await tx
+      .select()
+      .from(orderItems)
+      .where(and(eq(orderItems.id, itemId), eq(orderItems.orderId, orderId)))
+      .limit(1);
+    if (!item) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
 
-  await db.insert(orderEvents).values({
-    orderId,
-    actorId,
-    type: "items_edited",
-    payload: {
-      itemId,
-      before: { qty: oldQty, unitPrice: item.unitPrice },
-      after: { qty: newQty, unitPrice: newUnitPrice },
-    },
+    const oldQty = item.qty;
+    const newQty = parsed.data.qty;
+    if (newQty === oldQty) return { ok: true, data: { id: item.id } };
+
+    // The line keeps the price it was sold at. Re-deriving it here moved what
+    // the customer owes every time an admin nudged a quantity — including
+    // downwards, on an order already confirmed and paid for over WhatsApp —
+    // with nothing but a generic `items_edited` event to explain the change.
+    // Adding a line still prices at today's rate; that is a new agreement.
+    const newUnitPrice = item.unitPrice;
+
+    const delta = newQty - oldQty;
+    if (status !== "pending" && delta !== 0) {
+      const lines = await loadStockLines(tx, [
+        {
+          productId: item.productId,
+          variantId: item.variantId,
+          bundleId: item.bundleId,
+          qty: Math.abs(delta),
+          nameSnapshot: item.nameSnapshot,
+        },
+      ]);
+      if (delta > 0) {
+        await decrementStockLines(tx, lines, orderId, actorId, order.source === "pos" ? "pos_sale" : "web_sale");
+      } else {
+        for (const line of lines) await incrementStockLine(tx, line, orderId, actorId, "correction");
+      }
+    }
+
+    await tx.update(orderItems).set({ qty: newQty, unitPrice: newUnitPrice }).where(eq(orderItems.id, itemId));
+
+    await tx.insert(orderEvents).values({
+      orderId,
+      actorId,
+      type: "items_edited",
+      payload: {
+        itemId,
+        before: { qty: oldQty, unitPrice: item.unitPrice },
+        after: { qty: newQty, unitPrice: newUnitPrice },
+      },
+    });
+
+    await recomputeOrderTotals(tx, orderId);
+
+    return { ok: true, data: { id: itemId } };
   });
-
-  await recomputeOrderTotals(orderId);
-
-  return { ok: true, data: { id: itemId } };
 }
 
 export async function removeOrderItem(orderId: string, itemId: string): Promise<ServiceResult<{ id: string }>> {
@@ -1678,43 +1718,45 @@ export async function removeOrderItemCore(
   actorId: string,
   messages: OrderAdminMessages,
 ): Promise<ServiceResult<{ id: string }>> {
-  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-  if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
-  const status = order.status as OrderStatusValue;
-  if (!EDITABLE_STATUSES.includes(status)) {
-    return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
-  }
+  return inOrderTransaction(messages, async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+    if (!order) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
+    const status = order.status as OrderStatusValue;
+    if (!EDITABLE_STATUSES.includes(status)) {
+      return { ok: false, error: { code: "CONFLICT", message: messages.invalidTransition } };
+    }
 
-  const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
-  const item = itemRows.find((row) => row.id === itemId);
-  if (!item) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
-  if (itemRows.length <= 1) {
-    return { ok: false, error: { code: "VALIDATION", message: messages.cannotRemoveOnlyItem } };
-  }
+    const itemRows = await tx.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    const item = itemRows.find((row) => row.id === itemId);
+    if (!item) return { ok: false, error: { code: "NOT_FOUND", message: messages.notFound } };
+    if (itemRows.length <= 1) {
+      return { ok: false, error: { code: "VALIDATION", message: messages.cannotRemoveOnlyItem } };
+    }
 
-  if (status !== "pending") {
-    const lines = await loadStockLines([
-      {
-        productId: item.productId,
-        variantId: item.variantId,
-        bundleId: item.bundleId,
-        qty: item.qty,
-        nameSnapshot: item.nameSnapshot,
-      },
-    ]);
-    for (const line of lines) await incrementStockLine(line, orderId, actorId, "correction");
-  }
+    if (status !== "pending") {
+      const lines = await loadStockLines(tx, [
+        {
+          productId: item.productId,
+          variantId: item.variantId,
+          bundleId: item.bundleId,
+          qty: item.qty,
+          nameSnapshot: item.nameSnapshot,
+        },
+      ]);
+      for (const line of lines) await incrementStockLine(tx, line, orderId, actorId, "correction");
+    }
 
-  await db.delete(orderItems).where(eq(orderItems.id, itemId));
+    await tx.delete(orderItems).where(eq(orderItems.id, itemId));
 
-  await db.insert(orderEvents).values({
-    orderId,
-    actorId,
-    type: "line_removed",
-    payload: { itemId, before: { nameSnapshot: item.nameSnapshot, unitPrice: item.unitPrice, qty: item.qty }, after: null },
+    await tx.insert(orderEvents).values({
+      orderId,
+      actorId,
+      type: "line_removed",
+      payload: { itemId, before: { nameSnapshot: item.nameSnapshot, unitPrice: item.unitPrice, qty: item.qty }, after: null },
+    });
+
+    await recomputeOrderTotals(tx, orderId);
+
+    return { ok: true, data: { id: itemId } };
   });
-
-  await recomputeOrderTotals(orderId);
-
-  return { ok: true, data: { id: itemId } };
 }

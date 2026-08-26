@@ -468,7 +468,9 @@ export async function updateProductCore(
    * product with five variants spent twenty-odd network round trips saving
    * once. `db.batch` sends them together and, as a bonus, runs them in a
    * single transaction — which `db.transaction()` cannot do on this driver at
-   * all.
+   * all. (`withTransaction` in `src/db/client.ts` can, over a WebSocket,
+   * but it is for writes that interleave reads and branch on them; this is a
+   * fixed list of statements, which is exactly what `batch` is for.)
    *
    * The per-variant queries collapse into set-based ones: `inArray` over the
    * submitted variant ids instead of one query each, grouped in JS afterwards.

@@ -1,9 +1,6 @@
 import { like, sql } from "drizzle-orm";
-import { db } from "@/src/db/client";
-import { isUniqueViolation } from "@/src/lib/db-errors";
+import type { Tx } from "@/src/db/client";
 import { orders } from "@/src/db/schema";
-
-const MAX_ORDER_CODE_ATTEMPTS = 5;
 
 /**
  * `TFT-YYMM`. Was `PPT-` (the "Papeterie" scaffolding name) — PRODUCT.md
@@ -24,14 +21,12 @@ export function formatOrderCode(date: Date, sequence: number): string {
 
 /**
  * Highest sequence issued this month, + 1 — a high-water mark, not a row
- * count. Both order-creation paths delete their own order row when a later
- * write fails (`neon-http` has no transaction to roll back), so a count would
- * hand the next order a code that already exists and the retry below could
- * never escape it. Same reasoning as `sku.ts`.
+ * count, so a gap left by any deleted or rolled-back order can never hand the
+ * next order a code that already exists. Same reasoning as `sku.ts`.
  */
-async function nextOrderSequence(date: Date): Promise<number> {
+async function nextOrderSequence(tx: Tx, date: Date): Promise<number> {
   const prefix = orderCodeMonthPrefix(date);
-  const [row] = await db
+  const [row] = await tx
     .select({ value: sql<number | null>`max(substring(${orders.code} from ${`^${prefix}-([0-9]+)$`})::int)` })
     .from(orders)
     .where(like(orders.code, `${prefix}-%`));
@@ -39,22 +34,31 @@ async function nextOrderSequence(date: Date): Promise<number> {
 }
 
 /**
- * Formats a `TFT-YYMM-NNN` code and calls `insert` with it, retrying against a
- * strictly-advancing sequence on a unique-violation — same collision-retry
- * shape as `insertWithUniqueSku` (`sku.ts`), necessary because `neon-http` has
- * no transaction to lock the sequence with.
+ * Formats a `TFT-YYMM-NNN` code and calls `insert` with it, inside the caller's
+ * transaction.
+ *
+ * Reading the high-water mark and inserting against it is a read-then-write
+ * race: two registers ringing up at once both see the same maximum and both
+ * try the same code. This used to be handled by catching the unique violation
+ * and retrying with a higher sequence, which worked only because each
+ * statement was its own `neon-http` request. Inside a real transaction that
+ * approach is broken — a constraint violation poisons the whole transaction,
+ * so every statement after it fails too and there is nothing left to retry
+ * with.
+ *
+ * So the race is prevented rather than recovered from. The transaction-scoped
+ * advisory lock serialises code assignment for this month across concurrent
+ * transactions and is released automatically on commit *or* rollback, with no
+ * unlock path to forget. It is held only for the few statements a sale takes,
+ * and orders are written rarely next to how often they are read.
  */
-export async function insertWithUniqueOrderCode<T>(date: Date, insert: (code: string) => Promise<T>): Promise<T> {
-  let sequence = await nextOrderSequence(date);
+export async function insertWithUniqueOrderCode<T>(
+  tx: Tx,
+  date: Date,
+  insert: (code: string) => Promise<T>,
+): Promise<T> {
+  const prefix = orderCodeMonthPrefix(date);
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${prefix}))`);
 
-  for (let attempt = 0; attempt < MAX_ORDER_CODE_ATTEMPTS; attempt++) {
-    try {
-      return await insert(formatOrderCode(date, sequence));
-    } catch (error) {
-      if (!isUniqueViolation(error, "orders_code_unique") || attempt === MAX_ORDER_CODE_ATTEMPTS - 1) throw error;
-      const rechecked = await nextOrderSequence(date);
-      sequence = Math.max(rechecked, sequence + 1);
-    }
-  }
-  throw new Error("Could not assign a unique order code");
+  return insert(formatOrderCode(date, await nextOrderSequence(tx, date)));
 }

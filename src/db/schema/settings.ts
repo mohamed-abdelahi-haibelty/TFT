@@ -9,9 +9,9 @@ import { id, timestamps } from "./columns";
  *
  * Single row, enforced by a `unique` boolean that is always `true`: a settings
  * table with no key can silently accumulate a second row and then it's a coin
- * flip which one the storefront reads. `neon-http` has no transactions on this
- * project, so the upsert has to be one statement — `onConflictDoUpdate` against
- * this constraint is exactly that.
+ * flip which one the storefront reads. `onConflictDoUpdate` against this
+ * constraint keeps the write a single statement, which is both atomic on its
+ * own and cheaper than opening a transaction to achieve the same thing.
  */
 export const shopSettings = pgTable("shop_settings", {
   id: id(),

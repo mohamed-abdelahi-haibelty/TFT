@@ -15,20 +15,33 @@ import {
 } from "@/src/services/orders";
 
 /**
- * Every order mutation can change stock (confirm/cancel/edit all touch it),
- * so the storefront's product/bundle caches are always invalidated alongside
- * the order routes — cheaper than conditioning it on which action actually
- * moved stock. Only the *current* month's dashboard tag is revalidated (task
- * 16): a mutation on an old order is rare and the historical months it would
- * touch stay cached until their own short revalidation window passes.
+ * Admin surfaces only — deliberately *not* the storefront's `"products"` /
+ * `"bundles"` tags, which this used to blow away on every order transition.
+ *
+ * The line is drawn by what a mutation actually changes. These actions only
+ * move stock; they never touch a name, price, image, or active flag. Dropping
+ * a storefront tag for that meant a shop with a busy order desk destroyed the
+ * whole public catalog cache continuously through the working day, so the
+ * storefront was never warm and every visitor became a database wake — which
+ * on Neon's Free plan costs a five-minute minimum each time. Mutations that
+ * change what the storefront *says* still revalidate it immediately
+ * (product-actions.ts, bundle-actions.ts, category-actions.ts,
+ * promotion-actions.ts), as does the human-initiated `adjustStockAction`.
+ *
+ * What the storefront gives up is a stock number up to
+ * `STOREFRONT_REVALIDATE_SECONDS` old. Nothing rides on it: `createOrderCore`
+ * re-checks availability against the live row before an order is accepted, so
+ * a stale "in stock" cannot oversell — it can only cost one rejected submit.
+ *
+ * Only the *current* month's dashboard tag is revalidated (task 16): a
+ * mutation on an old order is rare and the historical months it would touch
+ * stay cached until their own short revalidation window passes.
  */
 async function revalidateOrder(orderId: string) {
   const locale = await getLocale();
   revalidatePath(`/${locale}/admin/orders`);
   revalidatePath(`/${locale}/admin/orders/${orderId}`);
   revalidatePath(`/${locale}/admin`);
-  revalidateTag("products", "max");
-  revalidateTag("bundles", "max");
   revalidateTag(dashboardMonthTag(currentMonthKey()), "max");
 }
 

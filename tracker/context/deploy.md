@@ -105,6 +105,11 @@ live at the edge:
 - Order tracking lookup — a code plus a phone number is the only credential an
   order has; rate-limit it so it cannot be enumerated.
 
+Storefront **reads** deliberately have no rate limit and need none: since the
+catalog-snapshot change no storefront URL a bot can invent reaches the database,
+so the worst a crawler costs is Vercel function time. The three above are the
+ones that still touch Postgres on demand.
+
 **Bot fight mode** on.
 
 ## Caching model (what a deploy actually invalidates)
@@ -112,14 +117,39 @@ live at the edge:
 The app runs with `cacheComponents: true` and `partialPrefetching: true`. Two
 consequences worth knowing before debugging a "why is this stale" report:
 
-- Storefront reads are `use cache` with the `storefront` profile — a 60-second
-  revalidate. That window is the only thing bounding how long a price may lag
-  the promotion calendar, because `getEffectivePrices` dates the promotion
-  window in SQL (`now()`) rather than reading a JS clock. Admin mutations call
-  `revalidateTag(...)`, so a *save* propagates immediately; a promotion simply
-  *starting* or *ending* takes up to 60 seconds.
+- Storefront reads are `use cache` with the `storefront` profile — a **15-minute**
+  revalidate (`STOREFRONT_REVALIDATE_SECONDS`, mirrored in `next.config.ts`).
+  That number is a Neon Free-plan budget, not a freshness preference: the plan
+  meters wall-clock time the compute is *awake*, scale-to-zero is fixed at five
+  minutes, so any query costs a five-minute minimum — and at the old 60s one
+  visitor per minute was enough to hold the database awake around the clock.
+- What that window does and does not bound:
+  - Admin **saves** are not subject to it — every content mutation calls
+    `revalidateTag(..., "max")` and lands immediately.
+  - A promotion **ending** is handled client-side (`promo-countdown.tsx` ticks
+    the clock and falls back to `postPromoPrice`), so a stale entry cannot keep
+    quoting a dead discount.
+  - A promotion **starting** is the one genuinely clock-driven lag: a scheduled
+    promo becomes visible up to 15 minutes late.
+  - **Stock is deliberately allowed to lag.** POS sales and order transitions no
+    longer revalidate the storefront's `products`/`bundles` tags — doing so
+    destroyed the whole public cache on every counter sale, so the storefront
+    was never warm during business hours. Nothing oversells: `createOrderCore`
+    re-checks availability against the live row before accepting an order, so a
+    stale "in stock" costs one rejected submit and nothing worse.
+- The whole browse surface (home, catalog, every category, every search, every
+  sort, both locales) is served from **two** cached snapshots filtered in memory
+  by `src/lib/catalog-filter.ts`, so a crafted `?q=` no longer reaches Postgres
+  at all. Measured on a production build: 10 never-seen search URLs cost 30
+  queries before, 0 after.
 - Cache keys include the build ID, so **every deploy is a full cache flush**.
-  The first request to each route after a deploy repopulates it.
+  The first request to each route after a deploy repopulates it. On the Free
+  plan that is not nothing — it is one warm-up fill per route — so avoid
+  redeploying repeatedly just to watch something change.
+
+> `next dev` does **not** reuse `use cache` entries; every page load re-queries.
+> Any measurement of caching behaviour has to be taken against
+> `next build && next start`, never the dev server.
 
 ## Verifying a deploy
 
@@ -151,7 +181,12 @@ Carried from `progress-tracker.md`, all still open at the time of writing:
   browser pass.
 - No visual verification of layout, RTL behaviour, or the image placeholder
   shimmer, for the same reason.
-- Neon branch split (above).
+- Neon branch split (above) — **re-confirmed still open and still leaking**: the
+  live `sitemap.xml` currently carries 24 `dash-test-*` URLs from the Vitest
+  suite. Note the one upside while it lasts: production and local share a
+  branch, so `npm run db:migrate` run locally *is* the production migration.
+  That stops being true the moment the branches are split, and step 2 of
+  "Running migrations against production" above becomes mandatory again.
 - `pencil.jpg` is Wikimedia Commons CC BY 3.0 and legally needs an attribution
   credit in the UI before a real launch.
 - Admin/POS first-load JS is ~1.1 MB; a `react-day-picker` + `date-fns` chunk of

@@ -1,3 +1,4 @@
+import { desc } from "drizzle-orm";
 import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 import { productVariants, products } from "./catalog";
@@ -24,5 +25,11 @@ export const stockMovements = pgTable(
   },
   (table) => [
     index("stock_movements_product_id_created_at_idx").on(table.productId, table.createdAt),
+    // `listStockMovements` defaults to no product filter at all — the whole
+    // ledger, newest first — which the composite above cannot serve, because
+    // `product_id` leads it. This is the fastest-growing table in the schema
+    // (one row per line per sale), so leaving that read as a full scan and
+    // sort gets steadily more expensive for the life of the shop.
+    index("stock_movements_created_at_idx").on(desc(table.createdAt)),
   ],
 );

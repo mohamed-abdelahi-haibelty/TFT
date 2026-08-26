@@ -8,9 +8,8 @@ import { cn } from "@/lib/utils";
 import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { formatMoney } from "@/src/lib/money";
 import { playAddError, playAddSuccess } from "@/src/lib/pos-sound";
-import { useRouter } from "@/src/i18n/navigation";
 import { completeSaleAction, resolvePosItemAction } from "@/src/services/pos-actions";
-import type { PosCategory, PosGridItem, PosResolvedLine } from "@/src/services/pos";
+import type { CompleteSaleResult, PosCategory, PosGridItem, PosResolvedLine } from "@/src/services/pos";
 
 type PaymentMethod = "cash" | "bankily" | "masrvi" | "sedad" | "other";
 const PAYMENT_METHODS: PaymentMethod[] = ["cash", "bankily", "masrvi", "sedad", "other"];
@@ -50,6 +49,49 @@ type SaleFeedback =
 
 function lineKey(line: { productId: string | null; variantId: string | null; bundleId: string | null }): string {
   return line.variantId ?? line.bundleId ?? line.productId ?? "";
+}
+
+/** A grid tile already carries everything a cart line needs — the two shapes only ever differed by name. */
+function gridItemToLine(item: PosGridItem): PosResolvedLine {
+  return {
+    kind: item.kind,
+    productId: item.productId,
+    variantId: item.variantId,
+    bundleId: item.bundleId,
+    sku: item.sku,
+    name: item.name,
+    unitPrice: item.unitPrice,
+    promo: item.promo,
+    stockQty: item.stockQty,
+    allowBackorder: item.allowBackorder,
+  };
+}
+
+/** Redraws the grid from what a completed sale reported, leaving anything it did not mention alone. */
+function applySaleLevels(
+  items: PosGridItem[],
+  stockLevels: CompleteSaleResult["stockLevels"],
+  bundleLevels: CompleteSaleResult["bundleLevels"],
+): PosGridItem[] {
+  if (stockLevels.length === 0 && bundleLevels.length === 0) return items;
+
+  // A variant tracking its own stock is keyed by variant; everything else
+  // (including a variant selling from its parent's pool) by product — the same
+  // `usesVariantStock` split `loadStockLines` makes on the server.
+  const byVariant = new Map(stockLevels.filter((l) => l.variantId).map((l) => [l.variantId!, l.stockQty]));
+  const byProduct = new Map(stockLevels.filter((l) => !l.variantId).map((l) => [l.productId, l.stockQty]));
+  const byBundle = new Map(bundleLevels.map((l) => [l.bundleId, l.maxSellable]));
+
+  return items.map((item) => {
+    if (item.bundleId) {
+      const maxSellable = byBundle.get(item.bundleId);
+      return maxSellable === undefined ? item : { ...item, stockQty: maxSellable, allowBackorder: maxSellable === null };
+    }
+    const stockQty =
+      (item.variantId ? byVariant.get(item.variantId) : undefined) ??
+      (item.productId ? byProduct.get(item.productId) : undefined);
+    return stockQty === undefined ? item : { ...item, stockQty };
+  });
 }
 
 /**
@@ -340,8 +382,8 @@ function readBasket(): PersistedBasket | null {
 }
 
 export function PosRegisterView({
-  quickPicks,
-  catalog,
+  quickPicks: quickPicksProp,
+  catalog: catalogProp,
   categories,
   canOverrideStock,
 }: {
@@ -358,7 +400,17 @@ export function PosRegisterView({
 }) {
   const t = useTranslations("admin.pos");
   const tCommon = useTranslations("common");
-  const router = useRouter();
+
+  // The grid is server-rendered once and then kept current in place: a
+  // completed sale reports exactly what its stock levels became, so the tiles
+  // are patched from the response instead of the whole page being re-fetched.
+  const [quickPicks, setQuickPicks] = useState(quickPicksProp);
+  const [catalog, setCatalog] = useState(catalogProp);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-seeding from the server on a real navigation is this effect's whole purpose
+    setQuickPicks(quickPicksProp);
+    setCatalog(catalogProp);
+  }, [quickPicksProp, catalogProp]);
 
   const [lines, setLines] = useState<CartLine[]>([]);
   const [removedLines, setRemovedLines] = useState<RemovedLine[]>([]);
@@ -458,10 +510,31 @@ export function PosRegisterView({
     commitAdd(line, existing?.key, false);
   }
 
-  /** Fired by tapping a quick-pick tile or a search result — resolves that item's own SKU and adds it to the cart. */
+  /**
+   * Fired by tapping a quick-pick tile, picking a search result, or scanning a
+   * barcode.
+   *
+   * Every one of those used to be a server round trip that re-read the session
+   * and looked the SKU up in three tables — about seven database round trips
+   * for each item added to a basket, all day, to learn something the register
+   * was already holding. The loaded grid carries every active product, variant
+   * and bundle with its SKU, price and stock, so a tap resolves from memory.
+   *
+   * The server is still asked about a SKU that is not in the grid — something
+   * created since the page loaded, which a scanner can reach and a tile cannot.
+   * None of this is a trust boundary: `completeSaleCore` re-resolves and
+   * re-prices every line inside the sale transaction, so what the client
+   * believes here only ever decides what the cashier is shown.
+   */
   async function handleSelectSku(rawSku: string) {
     const sku = rawSku.trim();
     if (!sku || resolving) return;
+
+    const known = catalog.find((item) => item.sku === sku) ?? quickPicks.find((item) => item.sku === sku);
+    if (known) {
+      addOrWarn(gridItemToLine(known));
+      return;
+    }
 
     setResolving(true);
     const result = await resolvePosItemAction(sku);
@@ -610,7 +683,10 @@ export function PosRegisterView({
     setLines([]);
     setRemovedLines([]);
     setPaymentMethod(null);
-    router.refresh();
+
+    const { stockLevels, bundleLevels } = result.data;
+    setCatalog((prev) => applySaleLevels(prev, stockLevels, bundleLevels));
+    setQuickPicks((prev) => applySaleLevels(prev, stockLevels, bundleLevels));
   }
 
   const isBrowsingCatalog = manualQuery.trim().length > 0 || selectedCategoryId !== "all";

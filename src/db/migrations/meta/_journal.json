@@ -71,6 +71,13 @@
       "when": 1787677246664,
       "tag": "0009_puzzling_scrambler",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787742571549,
+      "tag": "0010_amusing_tempest",
+      "breakpoints": true
     }
   ]
 }

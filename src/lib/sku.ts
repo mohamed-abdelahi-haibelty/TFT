@@ -3,10 +3,14 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { db } from "@/src/db/client";
 import { isUniqueViolation } from "@/src/lib/db-errors";
 
-// The `neon-http` driver has no transaction support (see progress-tracker.md),
-// so sequential SKU numbering can't be made atomic with a lock. Instead each
-// insert is retried on a unique-violation against a number that is guaranteed
-// to advance every attempt.
+// Catalog writes run on `db` (neon-http), one statement per request, so there
+// is no transaction here to hold a lock in — the way `order-code.ts` now
+// serialises order numbering with `pg_advisory_xact_lock`. Instead each insert
+// is retried on a unique-violation against a number that is guaranteed to
+// advance every attempt, which is adequate because two admins saving a new
+// product at the same instant is rare and the retry is cheap. A caller that
+// ever needs this *inside* a transaction must switch to the lock: a violation
+// poisons its own transaction, leaving nothing to retry with.
 //
 // The sequence is the table's current high-water mark, NOT its row count: a
 // count is blind to gaps, so deleting anything but the last row made every

@@ -2,7 +2,7 @@ import { hashPassword } from "better-auth/crypto";
 import { asc, eq } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { z } from "zod";
-import { db } from "@/src/db/client";
+import { db, withTransaction } from "@/src/db/client";
 import { accounts, sessions, users } from "@/src/db/schema";
 import { isUniqueViolation } from "@/src/lib/db-errors";
 import type { ServiceResult } from "@/src/lib/errors";
@@ -80,21 +80,35 @@ export async function createStaff(
     return { ok: false, error: { code: "CONFLICT", message: t("emailTaken") } };
   }
 
-  // neon-http has no transaction support (one query per HTTP round trip), so
-  // this is two sequential writes with a manual rollback of the user row if
-  // the credential insert fails, rather than a real atomic transaction.
-  let created: { id: string };
+  // A user without its credential row cannot sign in and cannot be invited
+  // again (the e-mail is taken), so the two writes are one unit. This used to
+  // be a `DELETE` in a catch block standing in for a rollback.
+  const password = await hashPassword(parsed.data.password);
+
   try {
-    [created] = await db
-      .insert(users)
-      .values({
-        name: parsed.data.name,
-        email: parsed.data.email,
-        emailVerified: true,
-        role: "staff",
-        isActive: true,
-      })
-      .returning({ id: users.id });
+    const created = await withTransaction(async (tx) => {
+      const [user] = await tx
+        .insert(users)
+        .values({
+          name: parsed.data.name,
+          email: parsed.data.email,
+          emailVerified: true,
+          role: "staff",
+          isActive: true,
+        })
+        .returning({ id: users.id });
+
+      await tx.insert(accounts).values({
+        userId: user.id,
+        accountId: user.id,
+        providerId: "credential",
+        password,
+      });
+
+      return user;
+    });
+
+    return { ok: true, data: { id: created.id } };
   } catch (error) {
     // The existence check above is not atomic; two invites for the same
     // address raced into a raw 23505 instead of "this e-mail is already used".
@@ -103,20 +117,6 @@ export async function createStaff(
     }
     throw error;
   }
-
-  try {
-    await db.insert(accounts).values({
-      userId: created.id,
-      accountId: created.id,
-      providerId: "credential",
-      password: await hashPassword(parsed.data.password),
-    });
-  } catch (error) {
-    await db.delete(users).where(eq(users.id, created.id));
-    throw error;
-  }
-
-  return { ok: true, data: { id: created.id } };
 }
 
 export async function deactivateUser(targetId: string): Promise<ServiceResult<{ id: string }>> {

@@ -104,7 +104,9 @@ export async function updateShopSettings(input: unknown): Promise<ServiceResult<
     return { ok: false, error: { code: "VALIDATION", message } };
   }
 
-  // One statement, no transaction — `neon-http` has none on this project.
+  // One statement, so it needs no transaction to be atomic — see the
+  // `shopSettings` schema comment for why the singleton constraint is what
+  // makes that work.
   await db
     .insert(shopSettings)
     .values({ singleton: true, ...parsed.data })

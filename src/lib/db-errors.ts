@@ -1,10 +1,15 @@
 /**
  * Postgres reports a broken unique index as SQLSTATE `23505` plus the
  * constraint name. Several services check a value's availability with a
- * `SELECT` and then insert it — which is not atomic, and can't be made atomic
- * here because `neon-http` has no transactions. Recognising the violation lets
- * those callers return the message they already prepared for that exact
- * outcome instead of letting a raw driver error escape the server action.
+ * `SELECT` and then insert it, which is not atomic — the index is the only
+ * real authority. Recognising the violation lets those callers return the
+ * message they already prepared for that exact outcome instead of letting a
+ * raw driver error escape the server action.
+ *
+ * Note where the check has to live once a caller is transactional: a
+ * constraint violation aborts its own transaction, so anything the handler
+ * wants to read afterwards (the winning row, in an idempotency retry) must be
+ * read outside it. See `createOrderCore` and `completeSaleCore`.
  *
  * The code and constraint are NOT on the error Drizzle throws: it wraps the
  * driver's `NeonDbError` in a `DrizzleQueryError` carrying it as `cause`. A

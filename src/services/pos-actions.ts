@@ -37,11 +37,19 @@ export async function completeSaleAction(payload: CompleteSalePayload): Promise<
   const result = await completeSale({ locale, ...payload });
   if (!result.ok) return result;
 
+  // Not `/admin/pos`, and not the storefront's `"products"` / `"bundles"`
+  // tags. A sale moves stock and nothing else — no name, price, image or
+  // active flag — and both of those were rebuilding whole pages to reflect it.
+  //
+  // The register redraws itself from the levels the sale returns (see
+  // `CompleteSaleResult`), and the storefront tolerates a stock number up to
+  // `STOREFRONT_REVALIDATE_SECONDS` old, which cannot oversell anything
+  // because `createOrderCore` re-checks availability before accepting an
+  // order. Between them that removes the busiest surface in the shop from the
+  // database's workload — see `revalidateOrder` in order-actions.ts, which
+  // draws the same line for the order desk.
   revalidatePath(`/${locale}/admin/orders`);
-  revalidatePath(`/${locale}/admin/pos`);
   revalidatePath(`/${locale}/admin`);
-  revalidateTag("products", "max");
-  revalidateTag("bundles", "max");
   revalidateTag(dashboardMonthTag(currentMonthKey()), "max");
 
   return result;

@@ -1,6 +1,6 @@
 import { eq, inArray, like, or } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { db } from "@/src/db/client";
+import { db, withTransaction } from "@/src/db/client";
 import {
   bundleItems,
   bundles,
@@ -230,21 +230,26 @@ describe("audit regressions", () => {
     const now = new Date();
     const prefix = orderCodeMonthPrefix(now);
 
-    const insertOrder = (code: string) =>
-      db
-        .insert(orders)
-        .values({ code, source: "web", status: "pending", subtotal: 0, total: 0 })
-        .returning({ id: orders.id, code: orders.code })
-        .then(([row]) => row);
+    const issueOrder = () =>
+      withTransaction((tx) =>
+        insertWithUniqueOrderCode(tx, now, (code) =>
+          tx
+            .insert(orders)
+            .values({ code, source: "web", status: "pending", subtotal: 0, total: 0 })
+            .returning({ id: orders.id, code: orders.code })
+            .then(([row]) => row),
+        ),
+      );
 
-    const first = await insertWithUniqueOrderCode(now, insertOrder);
-    const second = await insertWithUniqueOrderCode(now, insertOrder);
+    const first = await issueOrder();
+    const second = await issueOrder();
     createdOrderIds.push(second.id);
 
-    // Both creation paths delete their own order row when a later write fails.
+    // A sale that fails partway now rolls back, taking its order row with it —
+    // which is exactly the gap the high-water mark has to survive.
     await db.delete(orders).where(eq(orders.id, first.id));
 
-    const third = await insertWithUniqueOrderCode(now, insertOrder);
+    const third = await issueOrder();
     createdOrderIds.push(third.id);
 
     expect(third.code.startsWith(prefix)).toBe(true);
