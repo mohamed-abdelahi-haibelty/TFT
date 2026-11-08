@@ -246,4 +246,3 @@ export async function decrementStockLines(
 ): Promise<void> {
   for (const line of lines) await decrementStockLine(tx, line, orderId, actorId, reason);
 }
-
