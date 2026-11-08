@@ -12,6 +12,10 @@ Demo operator: `demo@tft.example` / `Explore-TFT-2026!`
 
 This deliberately public account can explore sales, orders, inventory, and the dashboard. It cannot manage accounts, change shop settings, or upload/delete product media. These credentials belong only to the demo, never to the real shop.
 
+![French storefront with synthetic demo artwork](assets/storefront.png)
+
+![Demo management dashboard](assets/management.png)
+
 ## What the code demonstrates
 
 - Arabic-first RTL and French interfaces with `next-intl`.
