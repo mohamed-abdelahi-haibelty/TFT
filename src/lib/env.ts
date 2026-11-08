@@ -48,7 +48,11 @@ const envSchema = z.object({
 });
 
 function loadEnv() {
-  const parsed = envSchema.safeParse(process.env);
+  const values = { ...process.env };
+  for (const key of ["BETTER_AUTH_URL", "NEXT_PUBLIC_SITE_URL", "VERCEL_PROJECT_PRODUCTION_URL", "NEXT_PUBLIC_WHATSAPP_NUMBER"]) {
+    if (values[key]?.trim() === "") delete values[key];
+  }
+  const parsed = envSchema.safeParse(values);
 
   if (!parsed.success) {
     const issues = parsed.error.issues

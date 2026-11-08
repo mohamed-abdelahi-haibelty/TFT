@@ -44,3 +44,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local agent tools and private data exports
+.agents/
+.claude/
+skills-lock.json
+*.dump
+*.sql.gz
+*.key
+*.log

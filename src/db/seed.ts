@@ -1,3 +1,4 @@
+import { assertSafeSeedTarget } from "../lib/seed-safety";
 import { hashPassword } from "better-auth/crypto";
 import { inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -154,6 +155,7 @@ async function seedBundles(productBySlug: Map<string, string>) {
 }
 
 async function main() {
+  assertSafeSeedTarget(process.env);
   const env = seedEnvSchema.parse(process.env);
 
   await seedAdmin(env);

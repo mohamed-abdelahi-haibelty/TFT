@@ -20,7 +20,7 @@ const OBSERVABILITY_ENV = process.env.VERCEL_ENV ?? "development";
 //
 // Sentry would normally infer this from VERCEL_GIT_COMMIT_SHA. That is empty on
 // this project: the Vercel project has no Git repository connected and every
-// deploy is a CLI upload from a working tree (see tracker/context/deploy.md).
+// deploy is a CLI upload from a working tree .
 // VERCEL_DEPLOYMENT_ID is the identifier that does exist for those.
 const SENTRY_RELEASE =
   process.env.VERCEL_DEPLOYMENT_ID ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "dev";
@@ -74,7 +74,7 @@ const nextConfig: NextConfig = {
 export default withSentryConfig(withNextIntl(nextConfig), {
   silent: true,
   // Upload fails silently without these — set them in the Vercel project
-  // alongside SENTRY_AUTH_TOKEN. See tracker/context/deploy.md.
+  // alongside SENTRY_AUTH_TOKEN.
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   release: { name: SENTRY_RELEASE },

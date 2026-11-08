@@ -60,8 +60,6 @@ describe("audit regressions", () => {
   let categoryId: string;
   let actorId: string;
   const createdProductIds: string[] = [];
-  const createdVariantIds: string[] = [];
-  const createdBundleIds: string[] = [];
   const createdOrderIds: string[] = [];
   const createdPromotionIds: string[] = [];
 

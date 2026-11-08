@@ -55,6 +55,13 @@ export default async function AdminLoginPage({
           <p className="mt-1.5 text-sm text-ink-soft">{t("subtitle")}</p>
         </div>
 
+        {process.env.NEXT_PUBLIC_DEMO_MODE === "true" && (
+          <div className="mb-5 rounded-xs border border-border bg-paper p-4 text-sm text-ink">
+            <p className="mb-2 font-semibold">{locale === "ar" ? "حساب تجريبي ببيانات وهمية" : "Compte de démonstration"}</p>
+            <p dir="ltr">demo@tft.example</p>
+            <p dir="ltr">Explore-TFT-2026!</p>
+          </div>
+        )}
         <NextIntlClientProvider messages={messages}>
           <LoginForm />
         </NextIntlClientProvider>

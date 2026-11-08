@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TFT — The First Trade
 
-## Getting Started
+A bilingual Arabic/French storefront and shop-management application for a Mauritanian stationery retailer. Customers browse and place orders without creating an account; staff use the same catalog, pricing, and stock through a barcode-driven point of sale.
 
-First, run the development server:
+## Try it
+
+**[Live portfolio demo](https://tft-portfolio-demo.vercel.app)** · **[Demo management console](https://tft-portfolio-demo.vercel.app/fr/admin/login)**
+
+The demo uses a separate Neon database with fictional products and orders. No payment is collected or real order fulfilled. Please use fictional customer details. Demo activity is shared between visitors and may be reset.
+
+Demo operator: `demo@tft.example` / `Explore-TFT-2026!`
+
+This deliberately public account can explore sales, orders, inventory, and the dashboard. It cannot manage accounts, change shop settings, or upload/delete product media. These credentials belong only to the demo, never to the real shop.
+
+## What the code demonstrates
+
+- Arabic-first RTL and French interfaces with `next-intl`.
+- A storefront, product variants, bundles, promotions, checkout, and order tracking.
+- Shared integer-MRU pricing across online and in-shop sales; checkout recalculates prices server-side.
+- Barcode POS, stock movements, and an auditable order lifecycle.
+- Transactional stock updates and idempotency keys for retried submissions.
+- Server-side role/permission checks for staff and administrators.
+- Database-backed regression tests for permissions, pricing, order transitions, and inventory.
+
+Next.js 16 and React 19 own the interface and server actions. Drizzle models PostgreSQL on Neon. Ordinary reads use Neon's HTTP driver; multi-step sales and stock operations use database transactions over WebSockets. Cloudinary serves product media. Better Auth handles staff sessions. Deployments run on Vercel in Frankfurt, near the existing Neon database.
+
+`src/services/stock-transactions.ts` contains the stock primitives shared by POS and order orchestration. `src/services/pricing.ts` is the pricing entry point. `src/services/authz.ts` and `src/lib/permissions.ts` define the access boundary. The project was built with AI assistance; domain rules and regression tests make the resulting behavior reviewable.
+
+## Run locally
+
+Requires Node.js 24+, npm, your own Neon development database, and Cloudinary credentials.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill in the required values. Generate `BETTER_AUTH_SECRET` with `openssl rand -hex 32`. Optional monitoring, WhatsApp, and site URL values may stay blank. To apply migrations and start the app:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+For fictional seed data, configure `SEED_ADMIN_EMAIL` and a private `SEED_ADMIN_PASSWORD`. Set `ALLOW_DESTRUCTIVE_SEED=true` only against a disposable database, then run `npm run db:seed`. **Seeding deletes existing catalog and order records.** The script refuses production environments and requires explicit opt-in.
 
-## Learn More
+## Verify
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Integration tests require a **separate disposable Neon database**, with all migrations applied. Put `TEST_DATABASE_URL` and the other required development environment values in an ignored `.env.test`, then run `npm test`. The suite writes and deletes records; it will not silently fall back to the application's `.env` database. GitHub CI runs lint, type checks, and unit tests without production credentials.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Repository map
 
-## Deploy on Vercel
+| Path | Responsibility |
+| --- | --- |
+| `app/`, `components/` | Storefront, management interface, server routes |
+| `src/services/` | Pricing, inventory, orders, POS, authorization |
+| `src/db/schema/`, `src/db/migrations/` | Database model and migration history |
+| `src/db/seed*.ts` | Fictional development catalog and account setup |
+| `src/lib/` | Validation, integrations, and shared domain helpers |
+| `tests/` | Unit and database-backed regression coverage |
+| `messages/` | Arabic and French translations |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scope
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Payments and delivery arrangements happen outside the application; the portfolio demo does not contact the real shop. The in-memory rate limiter is per server instance, so a real deployment also needs an edge or shared rate limit. Performance targets are not published benchmarks. Customer exports, credentials, and database dumps must remain outside Git.
+
+No source license has been selected. Third-party assets retain their own terms; the vendored shadcn CSS license is included in `src/styles/shadcn.LICENSE`.

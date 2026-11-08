@@ -141,6 +141,14 @@ export default async function LocaleLayout({
     >
       <body className="min-h-full flex flex-col">
         <NextIntlClientProvider messages={messages}>
+          {process.env.NEXT_PUBLIC_DEMO_MODE === "true" && (
+            <div className="border-b border-border bg-paper px-4 py-2 text-center text-sm text-ink">
+              {locale === "ar" ? "نسخة تجريبية — منتجات وطلبات وهمية. " : "Démo — produits et commandes fictifs. "}
+              <a className="font-semibold underline underline-offset-4" href={`/${locale}/admin/login`}>
+                {locale === "ar" ? "تجربة لوحة الإدارة" : "Tester la gestion"}
+              </a>
+            </div>
+          )}
           {children}
           {/* Reads `usePathname()`, which suspends while Next generates the
               App Shell for any route below with params it doesn't yet know.

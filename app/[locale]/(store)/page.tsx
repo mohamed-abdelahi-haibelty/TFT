@@ -8,7 +8,6 @@ import { ProductImage } from "@/components/store/product-image";
 import { ProductGridSkeleton } from "@/components/store/skeletons";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Link } from "@/src/i18n/navigation";
-import { buildCloudinaryUrl } from "@/src/lib/cloudinary";
 import { localized } from "@/src/lib/locale-text";
 import { buildPageMetadata } from "@/src/lib/seo";
 import { BUSINESS_LEGAL_NAME, storeJsonLd, webSiteJsonLd } from "@/src/lib/structured-data";
